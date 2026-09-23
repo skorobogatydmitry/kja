@@ -1,7 +1,11 @@
 //! Database requests handler
 
-use std::sync::{LazyLock, Mutex};
+use std::{
+    collections::HashSet,
+    sync::{LazyLock, Mutex},
+};
 
+use anyhow::Context;
 use refinery::embed_migrations;
 use rusqlite::Connection;
 
@@ -14,21 +18,71 @@ pub(super) static DATABASE: LazyLock<Mutex<Database>> = LazyLock::new(|| {
     migrations::runner()
         .run(&mut connection)
         .expect("database migrations failed");
-    Mutex::new(Database { connection })
+    Mutex::new(Database {
+        connection,
+        words_tail: HashSet::new(),
+    })
 });
 
 embed_migrations!();
 
 pub(super) struct Database {
     connection: Connection,
+    // list of already used words
+    words_tail: HashSet<Word>,
 }
 
 impl Database {
-    pub(super) fn next_by_kanji(&mut self, kanji: char, current_word: Word) -> Word {
+    /// get a random word
+    pub(super) fn random_word(&mut self) -> Word {
+        let word_id = self
+            .connection
+            .prepare("select word_id from word_component order by random() limit 1")
+            .expect("cannot get random word")
+            .query_one([], |r| r.get::<_, u32>(0))
+            .expect("cannot parse random word id");
+        let mut statement = self.connection.prepare("
+            select kr.kanji, kr.reading
+                from word_component as wc left join kanji_reading as kr on wc.kanji_reading_id = kr.id
+                where word_id = ?1
+                order by wc.word_position")
+            .expect("error on making statement for random word");
+        let readings = statement
+            .query_map([word_id], |row| {
+                Ok(KanjiReading {
+                    kanji: row.get::<_, String>(0)?.chars().next().unwrap(),
+                    furigana: row.get::<_, String>(1)?,
+                })
+            })
+            .expect("error selecting random word from database")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("error selecting random word from database");
+
+        let translations = self
+            .connection
+            .prepare("select translation from word_translation where word_id = ?1")
+            .expect("cannot get translations for the word")
+            .query_map([word_id], |row| Ok(row.get::<_, String>(0)?))
+            .expect("error selecting random word from database")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("error selecting random word from database");
+
+        let word = Word {
+            readings,
+            translations,
+        };
+        self.words_tail.insert(word.clone());
+
+        word
+    }
+
+    /// get next word with the same kanji (maybe different reading)
+    pub(super) fn next_by_kanji(&mut self, kanji: char) -> Word {
         todo!("get another word with the same kanji, != current_word")
     }
 
-    pub(super) fn next_by_reading(&mut self, reading: &KanjiReading, current_word: Word) -> Word {
+    /// get next word with the same kanji and its reading (maybe different reading)
+    pub(super) fn next_by_reading(&mut self, reading: &KanjiReading) -> Word {
         todo!("get another word with the same kanji reading, != current_word")
     }
 }

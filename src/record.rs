@@ -1,10 +1,11 @@
 //! word record representation
 //!
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub(crate) struct Word {
     // TODO: words like きょう　/ 今日
     pub readings: Vec<KanjiReading>,
+    pub translations: Vec<String>,
 }
 
 impl Word {
@@ -20,11 +21,12 @@ impl Word {
                     furigana: "にち".to_string(),
                 },
             ],
+            translations: vec!["каждый день".to_string(), "ежедневно".to_string()],
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub(crate) struct KanjiReading {
     pub kanji: char,
     pub furigana: String,

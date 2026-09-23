@@ -19,7 +19,8 @@ mod record;
 
 pub struct App {
     word: Arc<Mutex<Word>>,
-    word_revealed: Mutex<bool>,
+    furigana_revealed: Mutex<bool>,
+    translation_revealed: Mutex<bool>,
 }
 
 impl App {
@@ -46,8 +47,14 @@ impl App {
 
         Ok(Box::new(Self {
             // TODO: smart / on-demand algo on choosing
-            word: Arc::new(Mutex::new(Word::random_word())),
-            word_revealed: Mutex::new(false),
+            word: Arc::new(Mutex::new(
+                DATABASE
+                    .lock()
+                    .expect("database is poisoned!")
+                    .random_word(),
+            )),
+            furigana_revealed: Mutex::new(false),
+            translation_revealed: Mutex::new(false),
         }))
     }
 }
@@ -55,13 +62,20 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let current_word = self.word.get_cloned().expect("UI state is poisoned");
-        let mut is_revealed = self
-            .word_revealed
+        let mut is_furigana_revealed = self
+            .furigana_revealed
+            .get_cloned()
+            .expect("UI state it posoned");
+
+        let mut is_translation_revealed = self
+            .translation_revealed
             .get_cloned()
             .expect("UI state it posoned");
 
         StripBuilder::new(ui)
             .size(Size::remainder()) // top strip of big cells
+            .size(Size::exact(32.0)) // button row
+            .size(Size::remainder()) // bottom strip of big cells
             .size(Size::exact(32.0)) // button row
             .size(Size::remainder()) // bottom strip of big cells
             .vertical(|mut strip| {
@@ -80,10 +94,7 @@ impl eframe::App for App {
                                                 DATABASE
                                                     .lock()
                                                     .expect("DB is poisoned!")
-                                                    .next_by_kanji(
-                                                        symbol.kanji,
-                                                        current_word.clone(),
-                                                    ),
+                                                    .next_by_kanji(symbol.kanji),
                                             );
                                         }
                                     });
@@ -96,12 +107,12 @@ impl eframe::App for App {
                     ui.centered_and_justified(|ui| {
                         ui.scope(|ui| {
                             ui.set_max_width(120.0);
-                            if !is_revealed {
-                                if ui.button("reveal").clicked() {
-                                    self.word_revealed
+                            if !is_furigana_revealed {
+                                if ui.button("reveal reading").clicked() {
+                                    self.furigana_revealed
                                         .replace(true)
                                         .expect("UI state is poisoned");
-                                    is_revealed = true;
+                                    is_furigana_revealed = true;
                                 }
                             }
                         });
@@ -115,7 +126,7 @@ impl eframe::App for App {
                             for reading in current_word.readings.iter() {
                                 strip.cell(|ui| {
                                     ui.centered_and_justified(|ui| {
-                                        let furigana = if is_revealed {
+                                        let furigana = if is_furigana_revealed {
                                             reading.furigana.clone()
                                         } else {
                                             reading.furigana.chars().map(|_c| '何').collect()
@@ -128,12 +139,44 @@ impl eframe::App for App {
                                                 DATABASE
                                                     .lock()
                                                     .expect("DB is poisoned!")
-                                                    .next_by_reading(
-                                                        &reading,
-                                                        current_word.clone(),
-                                                    ),
+                                                    .next_by_reading(&reading),
                                             );
                                         }
+                                    });
+                                });
+                            }
+                        });
+                });
+
+                strip.cell(|ui| {
+                    ui.centered_and_justified(|ui| {
+                        ui.scope(|ui| {
+                            ui.set_max_width(120.0);
+                            if !is_translation_revealed {
+                                if ui.button("reveal translation").clicked() {
+                                    self.translation_revealed
+                                        .replace(true)
+                                        .expect("UI state is poisoned");
+                                    is_translation_revealed = true;
+                                }
+                            }
+                        });
+                    });
+                });
+
+                strip.strip(|builder| {
+                    builder
+                        .sizes(Size::remainder(), current_word.translations.len())
+                        .horizontal(|mut strip| {
+                            for translation in current_word.translations.iter() {
+                                strip.cell(|ui| {
+                                    ui.centered_and_justified(|ui| {
+                                        let translation = if is_translation_revealed {
+                                            translation.clone()
+                                        } else {
+                                            translation.chars().map(|_c| '?').collect()
+                                        };
+                                        ui.label(egui::RichText::new(translation).size(24.0))
                                     });
                                 });
                             }
@@ -145,7 +188,7 @@ impl eframe::App for App {
 
 impl App {
     fn replace_word(&mut self, new_word: Word) {
-        self.word_revealed
+        self.furigana_revealed
             .replace(false)
             .expect("UI state is poisoned");
         self.word.replace(new_word).expect("UI state is poisoned");
