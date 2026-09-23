@@ -13,11 +13,11 @@ impl Word {
             readings: vec![
                 KanjiReading {
                     kanji: '毎',
-                    reading: "まい".to_string(),
+                    furigana: "まい".to_string(),
                 },
                 KanjiReading {
                     kanji: '日',
-                    reading: "にち".to_string(),
+                    furigana: "にち".to_string(),
                 },
             ],
         }
@@ -27,5 +27,5 @@ impl Word {
 #[derive(Debug, Clone)]
 pub(crate) struct KanjiReading {
     pub kanji: char,
-    pub reading: String,
+    pub furigana: String,
 }

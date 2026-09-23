@@ -9,11 +9,12 @@ use eframe::CreationContext;
 use egui::{FontData, FontDefinitions};
 use egui_extras::{Size, StripBuilder};
 
-use crate::record::Word;
+use crate::{database::DATABASE, record::Word};
 
 pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 static JP_FONT: &[u8] = include_bytes!("../res/KleeOne-Regular.ttf");
 
+mod database;
 mod record;
 
 pub struct App {
@@ -75,7 +76,15 @@ impl eframe::App for App {
                                             .button(egui::RichText::new(symbol.kanji).size(24.0))
                                             .clicked()
                                         {
-                                            todo!("next word by kanji")
+                                            self.replace_word(
+                                                DATABASE
+                                                    .lock()
+                                                    .expect("DB is poisoned!")
+                                                    .next_by_kanji(
+                                                        symbol.kanji,
+                                                        current_word.clone(),
+                                                    ),
+                                            );
                                         }
                                     });
                                 });
@@ -103,19 +112,27 @@ impl eframe::App for App {
                     builder
                         .sizes(Size::remainder(), current_word.readings.len())
                         .horizontal(|mut strip| {
-                            for symbol in current_word.readings.iter() {
+                            for reading in current_word.readings.iter() {
                                 strip.cell(|ui| {
                                     ui.centered_and_justified(|ui| {
-                                        let reading = if is_revealed {
-                                            symbol.reading.clone()
+                                        let furigana = if is_revealed {
+                                            reading.furigana.clone()
                                         } else {
-                                            symbol.reading.chars().map(|_c| '何').collect()
+                                            reading.furigana.chars().map(|_c| '何').collect()
                                         };
                                         if ui
-                                            .button(egui::RichText::new(reading).size(24.0))
+                                            .button(egui::RichText::new(furigana).size(24.0))
                                             .clicked()
                                         {
-                                            todo!("next word by reading")
+                                            self.replace_word(
+                                                DATABASE
+                                                    .lock()
+                                                    .expect("DB is poisoned!")
+                                                    .next_by_reading(
+                                                        &reading,
+                                                        current_word.clone(),
+                                                    ),
+                                            );
                                         }
                                     });
                                 });
@@ -123,5 +140,14 @@ impl eframe::App for App {
                         });
                 });
             });
+    }
+}
+
+impl App {
+    fn replace_word(&mut self, new_word: Word) {
+        self.word_revealed
+            .replace(false)
+            .expect("UI state is poisoned");
+        self.word.replace(new_word).expect("UI state is poisoned");
     }
 }
