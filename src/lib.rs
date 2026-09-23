@@ -30,19 +30,15 @@ impl App {
 
         let mut fonts = FontDefinitions::default();
         let jp_font_name = String::from("KleeOne Regular");
-        // Install my own font (maybe supporting non-latin characters):
         fonts.font_data.insert(
             jp_font_name.clone(),
             std::sync::Arc::new(FontData::from_static(JP_FONT)),
         );
-
-        // Put my font as last fallback for monospace:
         fonts
             .families
             .get_mut(&egui::FontFamily::Proportional)
             .unwrap()
             .push(jp_font_name);
-
         cc.egui_ctx.set_fonts(fonts);
 
         Ok(Box::new(Self {
@@ -73,11 +69,11 @@ impl eframe::App for App {
             .expect("UI state it posoned");
 
         StripBuilder::new(ui)
-            .size(Size::remainder()) // top strip of big cells
-            .size(Size::exact(32.0)) // button row
-            .size(Size::remainder()) // bottom strip of big cells
-            .size(Size::exact(32.0)) // button row
-            .size(Size::remainder()) // bottom strip of big cells
+            .size(Size::remainder()) // the word
+            .size(Size::exact(32.0)) // furigana revealing button
+            .size(Size::remainder()) // furigana
+            .size(Size::exact(32.0)) // translations revealing button
+            .size(Size::remainder()) // translations
             .vertical(|mut strip| {
                 strip.strip(|builder| {
                     builder
