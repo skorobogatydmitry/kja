@@ -83,7 +83,7 @@ impl eframe::App for App {
                                 strip.cell(|ui| {
                                     ui.centered_and_justified(|ui| {
                                         if ui
-                                            .button(egui::RichText::new(symbol.kanji).size(24.0))
+                                            .button(egui::RichText::new(symbol.kanji).size(32.0))
                                             .clicked()
                                         {
                                             self.replace_word(
@@ -128,7 +128,7 @@ impl eframe::App for App {
                                             reading.furigana.chars().map(|_c| '何').collect()
                                         };
                                         if ui
-                                            .button(egui::RichText::new(furigana).size(24.0))
+                                            .button(egui::RichText::new(furigana).size(22.0))
                                             .clicked()
                                         {
                                             self.replace_word(
@@ -172,7 +172,7 @@ impl eframe::App for App {
                                         } else {
                                             translation.chars().map(|_c| '?').collect()
                                         };
-                                        ui.label(egui::RichText::new(translation).size(24.0))
+                                        ui.label(egui::RichText::new(translation).size(22.0))
                                     });
                                 });
                             }
