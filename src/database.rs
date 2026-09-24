@@ -5,6 +5,8 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
+use log::warn;
+use rand::seq::IteratorRandom;
 use refinery::embed_migrations;
 use rusqlite::Connection;
 
@@ -27,8 +29,8 @@ embed_migrations!();
 
 pub(super) struct Database {
     connection: Connection,
-    // list of already used words
-    words_tail: HashSet<Word>,
+    // list of already used word ids
+    words_tail: HashSet<u32>,
 }
 
 impl Database {
@@ -40,6 +42,76 @@ impl Database {
             .expect("cannot get random word")
             .query_one([], |r| r.get::<_, u32>(0))
             .expect("cannot parse random word id");
+
+        self.words_tail.insert(word_id);
+        self.fetch_word_by_id(word_id)
+    }
+
+    /// get next word with the same kanji (maybe different reading)
+    pub(super) fn next_by_kanji(&mut self, kanji: char) -> Word {
+        // TODO: exclude current word
+        let available_word_ids = self
+            .connection
+            .prepare("select word_id from word_component where kanji_reading_id in (select id from kanji_reading where kanji = ?1)")
+            .expect("cannot get word ids for kanji")
+            .query_map([kanji.to_string()], |r| r.get::<_, u32>(0))
+            .expect("cannot parse word ids")
+            .collect::<Result<HashSet<_>, _>>()
+            .expect("cannot parse word ids");
+
+        let unused_words = available_word_ids
+            .difference(&self.words_tail)
+            .cloned()
+            .collect::<Vec<u32>>();
+
+        let word_id = *if unused_words.is_empty() {
+            warn!("no new words with kanji {}, using random one", kanji);
+            available_word_ids.iter().choose(&mut rand::rng())
+        } else {
+            unused_words.iter().choose(&mut rand::rng())
+        }
+        .expect("no available words for the kanji"); // TODO: always works, as soon as the current word is not excluded
+
+        self.words_tail.insert(word_id);
+        self.fetch_word_by_id(word_id)
+    }
+
+    /// get next word with the same kanji and its reading (maybe different reading)
+    pub(super) fn next_by_reading(&mut self, reading: &KanjiReading) -> Word {
+        // TODO: exclude current word
+        let available_word_ids = self
+            .connection
+            .prepare("select word_id from word_component where kanji_reading_id in (select id from kanji_reading where kanji = ?1 and reading = ?2)")
+            .expect("cannot get word ids for reading")
+            .query_map([reading.kanji.to_string(), reading.furigana.clone()], |r| {
+                r.get::<_, u32>(0)
+            })
+            .expect("cannot parse word ids")
+            .collect::<Result<HashSet<_>, _>>()
+            .expect("cannot parse word ids");
+
+        let unused_words = available_word_ids
+            .difference(&self.words_tail)
+            .cloned()
+            .collect::<Vec<u32>>();
+
+        let word_id = *if unused_words.is_empty() {
+            warn!(
+                "no new words with reading {}, using random one",
+                reading.furigana
+            );
+            available_word_ids.iter().choose(&mut rand::rng())
+        } else {
+            unused_words.iter().choose(&mut rand::rng())
+        }
+        .expect("no available words for the reading"); // TODO: always works, as soon as the current word is not excluded
+
+        self.words_tail.insert(word_id);
+        self.fetch_word_by_id(word_id)
+    }
+
+    /// get word by ID from the database
+    fn fetch_word_by_id(&mut self, word_id: u32) -> Word {
         let mut statement = self.connection.prepare("
             select kr.kanji, kr.reading
                 from word_component as wc left join kanji_reading as kr on wc.kanji_reading_id = kr.id
@@ -65,23 +137,9 @@ impl Database {
             .expect("error selecting random word from database")
             .collect::<Result<Vec<_>, _>>()
             .expect("error selecting random word from database");
-
-        let word = Word {
+        Word {
             readings,
             translations,
-        };
-        self.words_tail.insert(word.clone());
-
-        word
-    }
-
-    /// get next word with the same kanji (maybe different reading)
-    pub(super) fn next_by_kanji(&mut self, _kanji: char) -> Word {
-        todo!("get another word with the same kanji, != current_word")
-    }
-
-    /// get next word with the same kanji and its reading (maybe different reading)
-    pub(super) fn next_by_reading(&mut self, _reading: &KanjiReading) -> Word {
-        todo!("get another word with the same kanji reading, != current_word")
+        }
     }
 }

@@ -186,6 +186,9 @@ impl App {
         self.furigana_revealed
             .replace(false)
             .expect("UI state is poisoned");
+        self.translation_revealed
+            .replace(false)
+            .expect("UI state is poisoned");
         self.word.replace(new_word).expect("UI state is poisoned");
     }
 }
