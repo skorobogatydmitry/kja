@@ -70,10 +70,8 @@ impl eframe::App for App {
 
         StripBuilder::new(ui)
             .size(Size::remainder()) // the word
-            .size(Size::exact(32.0)) // furigana revealing button
-            .size(Size::remainder()) // furigana
-            .size(Size::exact(32.0)) // translations revealing button
-            .size(Size::remainder()) // translations
+            .size(Size::remainder()) // furigana / revealing button
+            .size(Size::remainder()) // translations / revealing button
             .vertical(|mut strip| {
                 strip.strip(|builder| {
                     builder
@@ -83,7 +81,13 @@ impl eframe::App for App {
                                 strip.cell(|ui| {
                                     ui.centered_and_justified(|ui| {
                                         if ui
-                                            .button(egui::RichText::new(symbol.kanji).size(32.0))
+                                            .button(
+                                                egui::RichText::new(symbol.kanji)
+                                                    .size(32.0)
+                                                    .heading()
+                                                    .strong(),
+                                            )
+                                            .highlight()
                                             .clicked()
                                         {
                                             self.replace_word(
@@ -98,86 +102,81 @@ impl eframe::App for App {
                             }
                         });
                 });
-
-                strip.cell(|ui| {
-                    ui.centered_and_justified(|ui| {
-                        ui.scope(|ui| {
-                            ui.set_max_width(120.0);
-                            if !is_furigana_revealed {
+                if is_furigana_revealed {
+                    strip.strip(|builder| {
+                        builder
+                            .sizes(Size::remainder(), current_word.readings.len())
+                            .horizontal(|mut strip| {
+                                for reading in current_word.readings.iter() {
+                                    strip.cell(|ui| {
+                                        ui.centered_and_justified(|ui| {
+                                            if ui
+                                                .button(
+                                                    egui::RichText::new(reading.furigana.as_str())
+                                                        .size(22.0),
+                                                )
+                                                .clicked()
+                                            {
+                                                self.replace_word(
+                                                    DATABASE
+                                                        .lock()
+                                                        .expect("DB is poisoned!")
+                                                        .next_by_reading(reading),
+                                                );
+                                            }
+                                        });
+                                    });
+                                }
+                            });
+                    });
+                } else {
+                    strip.cell(|ui| {
+                        ui.centered_and_justified(|ui| {
+                            ui.scope(|ui| {
+                                ui.set_max_width(120.0);
                                 if ui.button("reveal reading").clicked() {
                                     self.furigana_revealed
                                         .replace(true)
                                         .expect("UI state is poisoned");
                                     is_furigana_revealed = true;
                                 }
-                            }
+                            });
                         });
                     });
-                });
+                }
 
-                strip.strip(|builder| {
-                    builder
-                        .sizes(Size::remainder(), current_word.readings.len())
-                        .horizontal(|mut strip| {
-                            for reading in current_word.readings.iter() {
-                                strip.cell(|ui| {
-                                    ui.centered_and_justified(|ui| {
-                                        let furigana = if is_furigana_revealed {
-                                            reading.furigana.clone()
-                                        } else {
-                                            reading.furigana.chars().map(|_c| '何').collect()
-                                        };
-                                        if ui
-                                            .button(egui::RichText::new(furigana).size(22.0))
-                                            .clicked()
-                                        {
-                                            self.replace_word(
-                                                DATABASE
-                                                    .lock()
-                                                    .expect("DB is poisoned!")
-                                                    .next_by_reading(&reading),
-                                            );
-                                        }
+                if is_translation_revealed {
+                    strip.strip(|builder| {
+                        builder
+                            .sizes(Size::remainder(), current_word.translations.len())
+                            .horizontal(|mut strip| {
+                                for translation in current_word.translations.iter() {
+                                    strip.cell(|ui| {
+                                        ui.centered_and_justified(|ui| {
+                                            ui.label(
+                                                egui::RichText::new(translation.as_str())
+                                                    .size(22.0),
+                                            )
+                                        });
                                     });
-                                });
-                            }
-                        });
-                });
-
-                strip.cell(|ui| {
-                    ui.centered_and_justified(|ui| {
-                        ui.scope(|ui| {
-                            ui.set_max_width(120.0);
-                            if !is_translation_revealed {
+                                }
+                            });
+                    });
+                } else {
+                    strip.cell(|ui| {
+                        ui.centered_and_justified(|ui| {
+                            ui.scope(|ui| {
+                                ui.set_max_width(120.0);
                                 if ui.button("reveal translation").clicked() {
                                     self.translation_revealed
                                         .replace(true)
                                         .expect("UI state is poisoned");
                                     is_translation_revealed = true;
                                 }
-                            }
+                            });
                         });
                     });
-                });
-
-                strip.strip(|builder| {
-                    builder
-                        .sizes(Size::remainder(), current_word.translations.len())
-                        .horizontal(|mut strip| {
-                            for translation in current_word.translations.iter() {
-                                strip.cell(|ui| {
-                                    ui.centered_and_justified(|ui| {
-                                        let translation = if is_translation_revealed {
-                                            translation.clone()
-                                        } else {
-                                            translation.chars().map(|_c| '?').collect()
-                                        };
-                                        ui.label(egui::RichText::new(translation).size(22.0))
-                                    });
-                                });
-                            }
-                        });
-                });
+                }
             });
     }
 }

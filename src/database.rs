@@ -5,7 +5,6 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use anyhow::Context;
 use refinery::embed_migrations;
 use rusqlite::Connection;
 
@@ -62,7 +61,7 @@ impl Database {
             .connection
             .prepare("select translation from word_translation where word_id = ?1")
             .expect("cannot get translations for the word")
-            .query_map([word_id], |row| Ok(row.get::<_, String>(0)?))
+            .query_map([word_id], |row| row.get::<_, String>(0))
             .expect("error selecting random word from database")
             .collect::<Result<Vec<_>, _>>()
             .expect("error selecting random word from database");
@@ -77,28 +76,12 @@ impl Database {
     }
 
     /// get next word with the same kanji (maybe different reading)
-    pub(super) fn next_by_kanji(&mut self, kanji: char) -> Word {
+    pub(super) fn next_by_kanji(&mut self, _kanji: char) -> Word {
         todo!("get another word with the same kanji, != current_word")
     }
 
     /// get next word with the same kanji and its reading (maybe different reading)
-    pub(super) fn next_by_reading(&mut self, reading: &KanjiReading) -> Word {
+    pub(super) fn next_by_reading(&mut self, _reading: &KanjiReading) -> Word {
         todo!("get another word with the same kanji reading, != current_word")
     }
 }
-
-// fn main() -> rusqlite::Result<()> {
-//     let mut conn = Connection::open("data.db")?;
-//     migrations::runner().run(&mut conn).unwrap();
-
-//     conn.execute("INSERT INTO users (name) VALUES (?1)", [&"Alice"])?;
-
-//     let mut stmt = conn.prepare("SELECT id, name FROM users")?;
-//     let rows = stmt.query_map([], |row| {
-//         Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-//     })?;
-//     for r in rows {
-//         println!("{:?}", r?);
-//     }
-//     Ok(())
-// }
