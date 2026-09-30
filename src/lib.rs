@@ -6,8 +6,8 @@ use std::{
 };
 
 use eframe::CreationContext;
-use egui::{FontData, FontDefinitions};
-use egui_extras::{Size, StripBuilder};
+use egui::{FontData, FontDefinitions, Layout, Popup, ScrollArea};
+use egui_extras::{Size, Strip, StripBuilder};
 
 use crate::{database::DATABASE, record::Word};
 
@@ -27,6 +27,8 @@ impl App {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(cc: &CreationContext) -> Result<Box<dyn eframe::App>, Box<dyn Error + Send + Sync>> {
         // cc.egui_ctx.set_zoom_factor(Settings::get().zoom_factor);
+        //
+        egui_extras::install_image_loaders(&cc.egui_ctx);
 
         let mut fonts = FontDefinitions::default();
         let jp_font_name = String::from("KleeOne Regular");
@@ -53,6 +55,40 @@ impl App {
             translation_revealed: Mutex::new(false),
         }))
     }
+
+    fn top_bar(&mut self, strip: &mut Strip) {
+        strip.strip(|builder| {
+            builder
+                .clip(true)
+                .size(Size::remainder()) // TODO: dynamic calc
+                .horizontal(|mut strip| {
+                    strip.cell(|ui| {
+                        ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+                            let info_popup_button = ui
+                                .button(egui::include_image!("../res/question.png"))
+                                .on_hover_text("info");
+                            Popup::menu(&info_popup_button)
+                                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                                .show(|ui| {
+                                    ScrollArea::both()
+                                        .show(ui, |ui| ui.label(include_str!("../README.md")));
+                                });
+                            if ui
+                                .button(egui::include_image!("../res/cog.png"))
+                                .on_hover_text("settings")
+                                .clicked()
+                            {
+                                self.settings_menu(ui);
+                            }
+                        });
+                    });
+                });
+        });
+    }
+
+    fn settings_menu(&self, ui: &mut egui::Ui) {
+        todo!()
+    }
 }
 
 impl eframe::App for App {
@@ -69,10 +105,9 @@ impl eframe::App for App {
             .expect("UI state it posoned");
 
         StripBuilder::new(ui)
-            .size(Size::remainder()) // the word
-            .size(Size::remainder()) // furigana / revealing button
-            .size(Size::remainder()) // translations / revealing button
+            .sizes(Size::remainder(), 4)
             .vertical(|mut strip| {
+                self.top_bar(&mut strip);
                 strip.strip(|builder| {
                     builder
                         .sizes(Size::remainder(), current_word.readings.len())
