@@ -68,6 +68,7 @@ impl App {
                                 .button(egui::include_image!("../res/question.png"))
                                 .on_hover_text("info");
                             Popup::menu(&info_popup_button)
+                                .gap(5.0)
                                 .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
                                 .show(|ui| {
                                     ScrollArea::both()
@@ -105,7 +106,8 @@ impl eframe::App for App {
             .expect("UI state it posoned");
 
         StripBuilder::new(ui)
-            .sizes(Size::remainder(), 4)
+            .size(Size::relative(0.2))
+            .sizes(Size::remainder(), 3)
             .vertical(|mut strip| {
                 self.top_bar(&mut strip);
                 strip.strip(|builder| {
