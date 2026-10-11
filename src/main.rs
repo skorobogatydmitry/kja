@@ -1,22 +1,31 @@
-fn main() -> eframe::Result {
+use fontdue::{Font, FontSettings};
+use kj_assoc::App;
+use rakugaki::{RenderMode, render_char_with_mode};
+
+fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    // shellpass::set_panic_handler();
+    ratatui::run(|terminal| App::default().run(terminal))
 
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_decorations(false)
-            .with_inner_size([400.0, 150.0])
-            .with_min_inner_size([200.0, 150.0])
-            .with_transparent(true),
-        ..Default::default()
-    };
-    eframe::run_native(
-        kj_assoc::NAME_VERSION,
-        options,
-        Box::new(|cc| {
-            // egui_extras::install_image_loaders(&cc.egui_ctx);
-            kj_assoc::App::new(cc)
-        }),
-    )
+    // let rendered_kanji_lines = render_char_with_mode(
+    //     "res/NotoSansJP-VariableFont_wght.ttf",
+    //     '蘇',
+    //     40,
+    //     20,
+    //     RenderMode::ANSI_TRUECOLOR,
+    // )
+    // .unwrap()
+    // .join("\n");
+    // print!("{}", rendered_kanji_lines);
+    //
+
+    // let mut rows = vec![String::new(); H / 4];
+    // for ch in "地下鉄道".chars() {
+    //     for (row, line) in rows.iter_mut().zip(to_braille(&glyph_dots(&font, ch))) {
+    //         row.push_str(&line);
+    //         row.push_str("  "); // gap between glyphs
+    //     }
+    // }
+    // println!("{}", rows.join("\n"));
+    // Ok(())
 }
