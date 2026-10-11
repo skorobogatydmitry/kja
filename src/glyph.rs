@@ -16,9 +16,9 @@ pub static SYMBOL_HEIGHT_DOTS: usize = 4;
 pub static BRAILLE_START_OFFSET: u32 = 0x2800;
 
 // less readable in 25x25, 40x40 is min to make out compex kanjis
-// pub static FONT_BYTES: &[u8] = include_bytes!("../res/KleeOne-Regular.ttf");
+pub static FONT_BYTES: &[u8] = include_bytes!("../res/KleeOne-Regular.ttf");
 /// this font is simple and could be made out from 25x25
-static FONT_BYTES: &[u8] = include_bytes!("../res/NotoSansJP-VariableFont_wght.ttf");
+// static FONT_BYTES: &[u8] = include_bytes!("../res/NotoSansJP-VariableFont_wght.ttf");
 static JP_FONT: LazyLock<Font> = LazyLock::new(|| {
     Font::from_bytes(FONT_BYTES, FontSettings::default()).expect("cannot load font")
 });

@@ -80,6 +80,9 @@ impl App {
             (KeyCode::Right, _) => self.goto_next_right(),
             (KeyCode::Up, _) => self.goto_next_up(),
             (KeyCode::Down, _) => self.goto_next_down(),
+            (KeyCode::Char('h'), _) => self.goto_help(),
+            (KeyCode::Char('f'), _) => self.furigana_revealed = !self.furigana_revealed,
+            (KeyCode::Char('t'), _) => self.translation_revealed = !self.translation_revealed,
 
             _ => {}
         }
@@ -101,6 +104,10 @@ impl App {
     fn goto_next_down(&self) {
         todo!()
     }
+
+    fn goto_help(&self) {
+        todo!()
+    }
 }
 
 impl Widget for &App {
@@ -110,13 +117,21 @@ impl Widget for &App {
         Self: Sized,
     {
         let intructions = Line::from(vec![
+            "<f>".into(),
+            " ".into(),
+            "reveal furigana".blue().into(),
+            " | ".into(),
+            "<t>".into(),
+            " ".into(),
+            "reveal translations".blue().into(),
+            " | ".into(),
             "<left, right, up, down arrows>".into(),
             " ".into(),
-            "navigation".red().into(),
+            "navigation".green().into(),
             " | ".into(),
             "<enter>".into(),
             " ".into(),
-            "select".red().into(),
+            "select".green().into(),
             " | ".into(),
             "<q, ^C>".into(),
             " ".into(),
@@ -134,11 +149,10 @@ impl Widget for &App {
 
         let rows = Layout::vertical([
             Constraint::Max(HEIGHT_SYMBOLS as u16 + 2), // word
-            Constraint::Percentage(20),                 // readings
-            Constraint::Percentage(20),                 // translations
+            Constraint::Max(3),                         // readings
+            Constraint::Fill(1),                        // translations
         ])
-        .margin(2)
-        // .spacing(1)
+        .margin(1)
         .split(outer_layout)
         .to_vec();
 
@@ -164,22 +178,54 @@ impl TopLevelRow {
     fn render_word(kanjis: Vec<char>, area: Rect, buf: &mut Buffer) {
         let num_kanjis = kanjis.len();
         let outer_layout =
-            Layout::horizontal((0..num_kanjis).map(|_| Constraint::Max(WIDTH_SYMBOLS as u16 + 2)))
+            Layout::horizontal((0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)))
                 .spacing(3)
                 .flex(ratatui::layout::Flex::Center)
                 .split(area)
                 .to_vec();
 
         for (kj, col) in kanjis.iter().zip(outer_layout) {
-            let kanji_block = Block::bordered()
-                .border_type(ratatui::widgets::BorderType::Rounded)
-                .shadow(Shadow::dark_shade());
+            let kanji_block = Block::bordered().border_type(ratatui::widgets::BorderType::Rounded);
 
             let rendered_kanji_lines = glyph::render(*kj);
             // let text = Text
             Paragraph::new(rendered_kanji_lines.join("\n"))
                 .block(kanji_block)
+                .centered()
                 .render(col, buf);
+        }
+    }
+
+    fn render_furigana(furiganas: Option<Vec<String>>, area: Rect, buf: &mut Buffer) {
+        match furiganas {
+            None => {
+                Paragraph::new("<furigana is hidden>")
+                    // .block(block)
+                    .centered()
+                    .render(area, buf);
+            }
+            Some(furiganas) => {
+                let num_kanjis = furiganas.len();
+                let outer_layout = Layout::horizontal(
+                    (0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)),
+                )
+                .spacing(3)
+                .flex(ratatui::layout::Flex::Center)
+                .split(area)
+                .to_vec();
+
+                for (furigana, col) in furiganas.into_iter().zip(outer_layout) {
+                    let block =
+                        Block::bordered().border_type(ratatui::widgets::BorderType::Rounded);
+
+                    // let rendered_kanji_lines = glyph::render(*kj);
+                    // let text = Text
+                    Paragraph::new(furigana.clone())
+                        .block(block)
+                        .centered()
+                        .render(col, buf);
+                }
+            }
         }
     }
 }
@@ -191,6 +237,7 @@ impl Widget for TopLevelRow {
     {
         match self {
             Self::Word(w) => Self::render_word(w, area, buf),
+            Self::Furigana(furiganas) => Self::render_furigana(furiganas, area, buf),
             _ => Paragraph::new("Not there yet")
                 .centered()
                 .block(Block::bordered())
