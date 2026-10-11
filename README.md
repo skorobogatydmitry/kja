@@ -3,7 +3,7 @@
 1. The application shows a word and expects you to recollect its reading
 2. You can reveal the reading and check yourself
 3. You can reveal word's translation and check it too
-4. After revealing the reading, you can click on any of the readings or the 漢字　-s to show another word with the same 漢字　or reading
+4. After revealing the reading, you can　choose any of the readings or the 漢字　-s to show another word with the same 漢字　or reading
 5. All the words are stored in database you can fill through the settings menu
 
 Other features:

@@ -1,28 +1,18 @@
 // #![feature(lock_value_accessors)]
 
-use std::{
-    error::Error,
-    num, process,
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
-
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use rakugaki::{RenderMode, render_char, render_char_with_mode};
 use ratatui::{
-    DefaultTerminal, Frame,
+    DefaultTerminal,
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Style, Stylize},
-    symbols::border,
-    text::{Line, Text},
-    widgets::{Block, Borders, Paragraph, Shadow, Widget},
+    text::Line,
+    widgets::{Block, Paragraph, Widget},
 };
 
 use crate::{
     database::DATABASE,
-    glyph::{HEIGHT_PX, HEIGHT_SYMBOLS, SYMBOL_HEIGHT_DOTS, WIDTH_SYMBOLS},
+    glyph::{HEIGHT_SYMBOLS, WIDTH_SYMBOLS},
     record::Word,
 };
 
@@ -33,12 +23,25 @@ mod glyph;
 mod record;
 // mod ui;
 
+#[derive(Debug)]
+enum Selection {
+    Kanji(usize),
+    Furigana(usize),
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Self::Kanji(0)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct App {
     word: Word,
     furigana_revealed: bool,
     translation_revealed: bool,
     exit: bool,
+    selected_item: Selection,
 }
 
 impl App {
@@ -78,35 +81,161 @@ impl App {
             }
             (KeyCode::Left, _) => self.goto_next_left(),
             (KeyCode::Right, _) => self.goto_next_right(),
-            (KeyCode::Up, _) => self.goto_next_up(),
-            (KeyCode::Down, _) => self.goto_next_down(),
+            (KeyCode::Up, _) => self.goto_next_row(),
+            (KeyCode::Down, _) => self.goto_next_row(),
+            (KeyCode::Enter, _) => {
+                match self.selected_item {
+                    Selection::Kanji(idx) => {
+                        let reading = &self.word.readings[idx];
+                        self.replace_word(
+                            DATABASE
+                                .lock()
+                                .expect("DB is poisoned!")
+                                .next_by_kanji(reading.kanji),
+                        );
+                    }
+                    Selection::Furigana(idx) => {
+                        self.replace_word(
+                            DATABASE
+                                .lock()
+                                .expect("DB is poisoned!")
+                                .next_by_reading(&self.word.readings[idx]),
+                        );
+                    }
+                };
+            }
             (KeyCode::Char('h'), _) => self.goto_help(),
             (KeyCode::Char('f'), _) => self.furigana_revealed = !self.furigana_revealed,
             (KeyCode::Char('t'), _) => self.translation_revealed = !self.translation_revealed,
+            (KeyCode::Char(ch), _) => {
+                if ch.is_digit(10) {
+                    let num_pressed = ch.to_digit(10).unwrap();
+                    match self.word.readings.get(num_pressed as usize - 1) {
+                        Some(reading) => {
+                            self.replace_word(
+                                DATABASE
+                                    .lock()
+                                    .expect("DB is poisoned!")
+                                    .next_by_kanji(reading.kanji),
+                            );
+                        }
+                        None => (), // TODO: show warning
+                    }
+                }
+            }
 
             _ => {}
         }
         Ok(())
     }
 
-    fn goto_next_left(&self) {
-        todo!()
+    fn goto_next_left(&mut self) {
+        self.selected_item = match self.selected_item {
+            Selection::Furigana(n) => Selection::Furigana(n.saturating_sub(1)),
+            Selection::Kanji(n) => Selection::Kanji(n.saturating_sub(1)),
+        }
     }
 
-    fn goto_next_right(&self) {
-        todo!()
+    fn goto_next_right(&mut self) {
+        let kanjis_in_word = self.word.readings.len() - 1;
+        self.selected_item = match self.selected_item {
+            Selection::Furigana(n) => Selection::Furigana(std::cmp::min(kanjis_in_word, n + 1)),
+            Selection::Kanji(n) => Selection::Kanji(std::cmp::min(kanjis_in_word, n + 1)),
+        }
     }
 
-    fn goto_next_up(&self) {
-        todo!()
-    }
-
-    fn goto_next_down(&self) {
-        todo!()
+    fn goto_next_row(&mut self) {
+        if self.furigana_revealed {
+            self.selected_item = match self.selected_item {
+                Selection::Furigana(n) => Selection::Kanji(n),
+                Selection::Kanji(n) => Selection::Furigana(n),
+            }
+        }
     }
 
     fn goto_help(&self) {
         todo!()
+    }
+
+    /// set the new word and reset the view
+    fn replace_word(&mut self, new_word: Word) {
+        self.word = new_word;
+        self.furigana_revealed = false;
+        self.translation_revealed = false;
+        self.selected_item = Selection::default();
+    }
+
+    fn render_word(&self, area: Rect, buf: &mut Buffer) {
+        let num_kanjis = self.word.readings.len();
+        let outer_layout =
+            Layout::horizontal((0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)))
+                .spacing(3)
+                .flex(ratatui::layout::Flex::Center)
+                .split(area)
+                .to_vec();
+
+        for (idx, (kj, col)) in self.word.readings.iter().zip(outer_layout).enumerate() {
+            let kanji_block = match self.selected_item {
+                Selection::Kanji(n) if n == idx => {
+                    Block::bordered().border_type(ratatui::widgets::BorderType::QuadrantOutside)
+                }
+                _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
+            };
+
+            let rendered_kanji_lines = glyph::render(kj.kanji);
+            Paragraph::new(rendered_kanji_lines.join("\n"))
+                .block(kanji_block)
+                .centered()
+                .render(col, buf);
+        }
+    }
+
+    fn render_furigana(&self, area: Rect, buf: &mut Buffer) {
+        if self.furigana_revealed {
+            let num_kanjis = self.word.readings.len();
+            let outer_layout = Layout::horizontal(
+                (0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)),
+            )
+            .spacing(3)
+            .flex(ratatui::layout::Flex::Center)
+            .split(area)
+            .to_vec();
+
+            for (idx, (reading, col)) in self.word.readings.iter().zip(outer_layout).enumerate() {
+                let block = match self.selected_item {
+                    Selection::Furigana(n) if n == idx => {
+                        Block::bordered().border_type(ratatui::widgets::BorderType::QuadrantOutside)
+                    }
+                    _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
+                };
+
+                Paragraph::new(reading.furigana.as_str())
+                    .block(block)
+                    .centered()
+                    .render(col, buf);
+            }
+        } else {
+            Paragraph::new("<furigana is hidden>")
+                .style(Style::new().bg(ratatui::style::Color::DarkGray))
+                .centered()
+                .render(area, buf);
+        }
+    }
+
+    fn render_translations(&self, area: Rect, buf: &mut Buffer) {
+        let paragraph = self
+            .translation_revealed
+            .then_some(self.word.translations.clone())
+            .map(|ts| Paragraph::new(ts.join(", ")))
+            .unwrap_or(
+                Paragraph::new("<translations are hidden>")
+                    .style(Style::new().bg(ratatui::style::Color::DarkGray)),
+            );
+
+        paragraph
+            .block(Block::bordered())
+            .centered()
+            .render(area, buf);
     }
 }
 
@@ -162,296 +291,8 @@ impl Widget for &App {
             .title_bottom(intructions)
             .render(area, buf);
 
-        for (idx, row) in rows.into_iter().enumerate() {
-            TopLevelRow::from((idx, self)).render(row, buf);
-        }
+        self.render_word(rows[0], buf);
+        self.render_furigana(rows[1], buf);
+        self.render_translations(rows[2], buf);
     }
 }
-
-enum TopLevelRow {
-    Word(Vec<char>),
-    Furigana(Option<Vec<String>>),
-    Translations(Option<Vec<String>>),
-}
-
-impl TopLevelRow {
-    fn render_word(kanjis: Vec<char>, area: Rect, buf: &mut Buffer) {
-        let num_kanjis = kanjis.len();
-        let outer_layout =
-            Layout::horizontal((0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)))
-                .spacing(3)
-                .flex(ratatui::layout::Flex::Center)
-                .split(area)
-                .to_vec();
-
-        for (kj, col) in kanjis.iter().zip(outer_layout) {
-            let kanji_block = Block::bordered().border_type(ratatui::widgets::BorderType::Rounded);
-
-            let rendered_kanji_lines = glyph::render(*kj);
-            Paragraph::new(rendered_kanji_lines.join("\n"))
-                .block(kanji_block)
-                .centered()
-                .render(col, buf);
-        }
-    }
-
-    fn render_furigana(furiganas: Option<Vec<String>>, area: Rect, buf: &mut Buffer) {
-        match furiganas {
-            None => {
-                Paragraph::new("<furigana is hidden>")
-                    .style(Style::new().bg(ratatui::style::Color::DarkGray))
-                    .centered()
-                    .render(area, buf);
-            }
-            Some(furiganas) => {
-                let num_kanjis = furiganas.len();
-                let outer_layout = Layout::horizontal(
-                    (0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)),
-                )
-                .spacing(3)
-                .flex(ratatui::layout::Flex::Center)
-                .split(area)
-                .to_vec();
-
-                for (furigana, col) in furiganas.into_iter().zip(outer_layout) {
-                    let block =
-                        Block::bordered().border_type(ratatui::widgets::BorderType::Rounded);
-
-                    Paragraph::new(furigana.clone())
-                        .block(block)
-                        .centered()
-                        .render(col, buf);
-                }
-            }
-        }
-    }
-
-    fn render_translations(translations: Option<Vec<String>>, area: Rect, buf: &mut Buffer) {
-        let paragraph = translations
-            .map(|ts| Paragraph::new(ts.join(", ")))
-            .unwrap_or(
-                Paragraph::new("<translations are hidden>")
-                    .style(Style::new().bg(ratatui::style::Color::DarkGray)),
-            );
-
-        paragraph
-            .block(Block::bordered())
-            .centered()
-            .render(area, buf);
-    }
-}
-
-impl Widget for TopLevelRow {
-    fn render(self, area: Rect, buf: &mut Buffer)
-    where
-        Self: Sized,
-    {
-        match self {
-            Self::Word(w) => Self::render_word(w, area, buf),
-            Self::Furigana(furiganas) => Self::render_furigana(furiganas, area, buf),
-            Self::Translations(translations) => Self::render_translations(translations, area, buf),
-        }
-    }
-}
-
-impl From<(usize, &App)> for TopLevelRow {
-    fn from(value: (usize, &App)) -> Self {
-        let (row_idx, app) = value;
-        match row_idx {
-            0 => Self::Word(app.word.readings.iter().map(|kr| kr.kanji).collect()),
-            1 => Self::Furigana(
-                app.furigana_revealed.then_some(
-                    app.word
-                        .readings
-                        .iter()
-                        .map(|kr| kr.furigana.clone())
-                        .collect(),
-                ),
-            ),
-            2 => Self::Translations(
-                app.translation_revealed
-                    .then_some(app.word.translations.iter().cloned().collect()),
-            ),
-            _ => panic!("more rows on the top level than expected"),
-        }
-    }
-}
-
-//     fn top_bar(&mut self, strip: &mut Strip) {
-//         strip.strip(|builder| {
-//             builder
-//                 .clip(true)
-//                 .size(Size::remainder()) // TODO: dynamic calc
-//                 .horizontal(|mut strip| {
-//                     strip.cell(|ui| {
-//                         ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
-//                             let info_popup_button = ui
-//                                 .button(egui::include_image!("../res/question.png"))
-//                                 .on_hover_text("info");
-//                             Popup::menu(&info_popup_button)
-//                                 .gap(5.0)
-//                                 .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-//                                 .show(|ui| {
-//                                     ScrollArea::both()
-//                                         .show(ui, |ui| ui.label(include_str!("../README.md")));
-//                                 });
-//                             if ui
-//                                 .button(egui::include_image!("../res/cog.png"))
-//                                 .on_hover_text("settings")
-//                                 .clicked()
-//                             {
-//                                 self.settings_menu(ui);
-//                             }
-
-//                             let add_kanji_button = ui
-//                                 .button(egui::include_image!("../res/add.png"))
-//                                 .on_hover_text("add a new kanji");
-//                             ui::add_kanji::popup(&add_kanji_button);
-//                         });
-//                     });
-//                 });
-//         });
-//     }
-
-//     fn settings_menu(&self, ui: &mut egui::Ui) {
-//         todo!()
-//     }
-// }
-
-// impl eframe::App for App {
-//     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-//         let current_word = self.word.get_cloned().expect("UI state is poisoned");
-//         let mut is_furigana_revealed = self
-//             .furigana_revealed
-//             .get_cloned()
-//             .expect("UI state it posoned");
-
-//         let mut is_translation_revealed = self
-//             .translation_revealed
-//             .get_cloned()
-//             .expect("UI state it posoned");
-
-//         StripBuilder::new(ui)
-//             .size(Size::relative(0.2))
-//             .sizes(Size::remainder(), 3)
-//             .vertical(|mut strip| {
-//                 self.top_bar(&mut strip);
-//                 strip.strip(|builder| {
-//                     builder
-//                         .sizes(Size::remainder(), current_word.readings.len())
-//                         .horizontal(|mut strip| {
-//                             for symbol in current_word.readings.iter() {
-//                                 strip.cell(|ui| {
-//                                     ui.centered_and_justified(|ui| {
-//                                         if ui
-//                                             .button(
-//                                                 egui::RichText::new(symbol.kanji)
-//                                                     .size(32.0)
-//                                                     .heading()
-//                                                     .strong(),
-//                                             )
-//                                             .highlight()
-//                                             .clicked()
-//                                         {
-//                                             self.replace_word(
-//                                                 DATABASE
-//                                                     .lock()
-//                                                     .expect("DB is poisoned!")
-//                                                     .next_by_kanji(symbol.kanji),
-//                                             );
-//                                         }
-//                                     });
-//                                 });
-//                             }
-//                         });
-//                 });
-//                 if is_furigana_revealed {
-//                     strip.strip(|builder| {
-//                         builder
-//                             .sizes(Size::remainder(), current_word.readings.len())
-//                             .horizontal(|mut strip| {
-//                                 for reading in current_word.readings.iter() {
-//                                     strip.cell(|ui| {
-//                                         ui.centered_and_justified(|ui| {
-//                                             if ui
-//                                                 .button(
-//                                                     egui::RichText::new(reading.furigana.as_str())
-//                                                         .size(22.0),
-//                                                 )
-//                                                 .clicked()
-//                                             {
-//                                                 self.replace_word(
-//                                                     DATABASE
-//                                                         .lock()
-//                                                         .expect("DB is poisoned!")
-//                                                         .next_by_reading(reading),
-//                                                 );
-//                                             }
-//                                         });
-//                                     });
-//                                 }
-//                             });
-//                     });
-//                 } else {
-//                     strip.cell(|ui| {
-//                         ui.centered_and_justified(|ui| {
-//                             ui.scope(|ui| {
-//                                 ui.set_max_width(120.0);
-//                                 if ui.button("reveal reading").clicked() {
-//                                     self.furigana_revealed
-//                                         .replace(true)
-//                                         .expect("UI state is poisoned");
-//                                     is_furigana_revealed = true;
-//                                 }
-//                             });
-//                         });
-//                     });
-//                 }
-
-//                 if is_translation_revealed {
-//                     strip.strip(|builder| {
-//                         builder
-//                             .sizes(Size::remainder(), current_word.translations.len())
-//                             .horizontal(|mut strip| {
-//                                 for translation in current_word.translations.iter() {
-//                                     strip.cell(|ui| {
-//                                         ui.centered_and_justified(|ui| {
-//                                             ui.label(
-//                                                 egui::RichText::new(translation.as_str())
-//                                                     .size(22.0),
-//                                             )
-//                                         });
-//                                     });
-//                                 }
-//                             });
-//                     });
-//                 } else {
-//                     strip.cell(|ui| {
-//                         ui.centered_and_justified(|ui| {
-//                             ui.scope(|ui| {
-//                                 ui.set_max_width(120.0);
-//                                 if ui.button("reveal translation").clicked() {
-//                                     self.translation_revealed
-//                                         .replace(true)
-//                                         .expect("UI state is poisoned");
-//                                     is_translation_revealed = true;
-//                                 }
-//                             });
-//                         });
-//                     });
-//                 }
-//             });
-//     }
-// }
-
-// impl App {
-//     fn replace_word(&mut self, new_word: Word) {
-//         self.furigana_revealed
-//             .replace(false)
-//             .expect("UI state is poisoned");
-//         self.translation_revealed
-//             .replace(false)
-//             .expect("UI state is poisoned");
-//         self.word.replace(new_word).expect("UI state is poisoned");
-//     }
-// }
