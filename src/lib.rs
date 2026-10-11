@@ -188,7 +188,6 @@ impl TopLevelRow {
             let kanji_block = Block::bordered().border_type(ratatui::widgets::BorderType::Rounded);
 
             let rendered_kanji_lines = glyph::render(*kj);
-            // let text = Text
             Paragraph::new(rendered_kanji_lines.join("\n"))
                 .block(kanji_block)
                 .centered()
@@ -200,7 +199,7 @@ impl TopLevelRow {
         match furiganas {
             None => {
                 Paragraph::new("<furigana is hidden>")
-                    // .block(block)
+                    .style(Style::new().bg(ratatui::style::Color::DarkGray))
                     .centered()
                     .render(area, buf);
             }
@@ -218,8 +217,6 @@ impl TopLevelRow {
                     let block =
                         Block::bordered().border_type(ratatui::widgets::BorderType::Rounded);
 
-                    // let rendered_kanji_lines = glyph::render(*kj);
-                    // let text = Text
                     Paragraph::new(furigana.clone())
                         .block(block)
                         .centered()
@@ -227,6 +224,20 @@ impl TopLevelRow {
                 }
             }
         }
+    }
+
+    fn render_translations(translations: Option<Vec<String>>, area: Rect, buf: &mut Buffer) {
+        let paragraph = translations
+            .map(|ts| Paragraph::new(ts.join(", ")))
+            .unwrap_or(
+                Paragraph::new("<translations are hidden>")
+                    .style(Style::new().bg(ratatui::style::Color::DarkGray)),
+            );
+
+        paragraph
+            .block(Block::bordered())
+            .centered()
+            .render(area, buf);
     }
 }
 
@@ -238,10 +249,7 @@ impl Widget for TopLevelRow {
         match self {
             Self::Word(w) => Self::render_word(w, area, buf),
             Self::Furigana(furiganas) => Self::render_furigana(furiganas, area, buf),
-            _ => Paragraph::new("Not there yet")
-                .centered()
-                .block(Block::bordered())
-                .render(area, buf),
+            Self::Translations(translations) => Self::render_translations(translations, area, buf),
         }
     }
 }
@@ -268,33 +276,6 @@ impl From<(usize, &App)> for TopLevelRow {
         }
     }
 }
-//         egui_extras::install_image_loaders(&cc.egui_ctx);
-
-//         let mut fonts = FontDefinitions::default();
-//         let jp_font_name = String::from("KleeOne Regular");
-//         fonts.font_data.insert(
-//             jp_font_name.clone(),
-//             std::sync::Arc::new(FontData::from_static(JP_FONT)),
-//         );
-//         fonts
-//             .families
-//             .get_mut(&egui::FontFamily::Proportional)
-//             .unwrap()
-//             .push(jp_font_name);
-//         cc.egui_ctx.set_fonts(fonts);
-
-//         Ok(Box::new(Self {
-//             // TODO: smart / on-demand algo on choosing
-//             word: Arc::new(Mutex::new(
-//                 DATABASE
-//                     .lock()
-//                     .expect("database is poisoned!")
-//                     .random_word(),
-//             )),
-//             furigana_revealed: Mutex::new(false),
-//             translation_revealed: Mutex::new(false),
-//         }))
-//     }
 
 //     fn top_bar(&mut self, strip: &mut Strip) {
 //         strip.strip(|builder| {

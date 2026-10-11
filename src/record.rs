@@ -15,7 +15,7 @@ impl Default for Word {
         DATABASE
             .lock()
             .expect("database is poisoned!")
-            .random_word()
+            .random_word() // TODO: custom logic
     }
 }
 
