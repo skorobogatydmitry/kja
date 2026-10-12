@@ -1,7 +1,25 @@
+use std::io::stdout;
+
+use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
+    execute,
+};
 use kj_assoc::App;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    ratatui::run(|terminal| App::default().run(terminal))
+    execute!(stdout(), EnableMouseCapture).unwrap();
+
+    let default_panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = execute!(stdout(), DisableMouseCapture);
+        default_panic_hook(info);
+    }));
+
+    let result = ratatui::run(|terminal| App::default().run(terminal));
+
+    let _ = execute!(stdout(), DisableMouseCapture);
+
+    result
 }

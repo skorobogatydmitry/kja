@@ -1,10 +1,13 @@
 // #![feature(lock_value_accessors)]
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
+};
 use ratatui::{
     DefaultTerminal,
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Position, Rect},
     style::{Style, Stylize},
     text::Line,
     widgets::{Block, Paragraph, Widget},
@@ -21,9 +24,8 @@ pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_
 mod database;
 mod glyph;
 mod record;
-// mod ui;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Selection {
     Kanji(usize),
     Furigana(usize),
@@ -35,13 +37,14 @@ impl Default for Selection {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct App {
     word: Word,
     furigana_revealed: bool,
     translation_revealed: bool,
     exit: bool,
     selected_item: Selection,
+    clickables: Vec<(Rect, Selection)>,
 }
 
 impl App {
@@ -50,12 +53,13 @@ impl App {
         while !self.exit {
             self.draw(terminal)?;
             self.handle_events()?;
+            self.clickables = vec![];
         }
         Ok(())
     }
 
     /// frame re-drawer
-    fn draw(&self, terminal: &mut DefaultTerminal) -> anyhow::Result<()> {
+    fn draw(&mut self, terminal: &mut DefaultTerminal) -> anyhow::Result<()> {
         terminal.draw(|frame| {
             frame.render_widget(self, frame.area());
         })?;
@@ -69,6 +73,7 @@ impl App {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
                 self.handle_key_event(key_event)
             }
+            Event::Mouse(mouse_event) => self.handle_mouse_event(mouse_event),
             _ => Ok(()), // TODO: log
         }
     }
@@ -83,50 +88,56 @@ impl App {
             (KeyCode::Right, _) => self.goto_next_right(),
             (KeyCode::Up, _) => self.goto_next_row(),
             (KeyCode::Down, _) => self.goto_next_row(),
-            (KeyCode::Enter, _) => {
-                match self.selected_item {
-                    Selection::Kanji(idx) => {
-                        let reading = &self.word.readings[idx];
-                        self.replace_word(
-                            DATABASE
-                                .lock()
-                                .expect("DB is poisoned!")
-                                .next_by_kanji(reading.kanji),
-                        );
-                    }
-                    Selection::Furigana(idx) => {
-                        self.replace_word(
-                            DATABASE
-                                .lock()
-                                .expect("DB is poisoned!")
-                                .next_by_reading(&self.word.readings[idx]),
-                        );
-                    }
-                };
-            }
+            (KeyCode::Enter, _) => self.apply_selection(&self.selected_item.clone()),
             (KeyCode::Char('h'), _) => self.goto_help(),
             (KeyCode::Char('f'), _) => self.furigana_revealed = !self.furigana_revealed,
             (KeyCode::Char('t'), _) => self.translation_revealed = !self.translation_revealed,
-            (KeyCode::Char(ch), _) => {
-                if ch.is_digit(10) {
-                    let num_pressed = ch.to_digit(10).unwrap();
-                    match self.word.readings.get(num_pressed as usize - 1) {
-                        Some(reading) => {
-                            self.replace_word(
-                                DATABASE
-                                    .lock()
-                                    .expect("DB is poisoned!")
-                                    .next_by_kanji(reading.kanji),
-                            );
-                        }
-                        None => (), // TODO: show warning
-                    }
-                }
-            }
-
             _ => {}
         }
         Ok(())
+    }
+
+    fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> Result<(), anyhow::Error> {
+        match mouse_event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                let position = Position::new(mouse_event.column, mouse_event.row);
+                let selection = self
+                    .clickables
+                    .iter()
+                    .find(|(rect, _s)| rect.contains(position))
+                    .map(|(_rect, s)| s)
+                    .cloned();
+                if let Some(s) = selection {
+                    self.apply_selection(&s);
+                }
+            }
+            _ => (), // TODO: log
+        }
+
+        Ok(())
+    }
+
+    /// takes the next word as by the selected kanji / furigana
+    fn apply_selection(&mut self, selection: &Selection) {
+        match selection {
+            Selection::Kanji(idx) => {
+                let reading = &self.word.readings[*idx];
+                self.replace_word(
+                    DATABASE
+                        .lock()
+                        .expect("DB is poisoned!")
+                        .next_by_kanji(reading.kanji),
+                );
+            }
+            Selection::Furigana(idx) => {
+                self.replace_word(
+                    DATABASE
+                        .lock()
+                        .expect("DB is poisoned!")
+                        .next_by_reading(&self.word.readings[*idx]),
+                );
+            }
+        }
     }
 
     fn goto_next_left(&mut self) {
@@ -165,7 +176,7 @@ impl App {
         self.selected_item = Selection::default();
     }
 
-    fn render_word(&self, area: Rect, buf: &mut Buffer) {
+    fn render_word(&mut self, area: Rect, buf: &mut Buffer) {
         let num_kanjis = self.word.readings.len();
         let outer_layout =
             Layout::horizontal((0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)))
@@ -174,7 +185,7 @@ impl App {
                 .split(area)
                 .to_vec();
 
-        for (idx, (kj, col)) in self.word.readings.iter().zip(outer_layout).enumerate() {
+        for (idx, (reading, col)) in self.word.readings.iter().zip(outer_layout).enumerate() {
             let kanji_block = match self.selected_item {
                 Selection::Kanji(n) if n == idx => {
                     Block::bordered().border_type(ratatui::widgets::BorderType::QuadrantOutside)
@@ -182,15 +193,16 @@ impl App {
                 _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
             };
 
-            let rendered_kanji_lines = glyph::render(kj.kanji);
+            let rendered_kanji_lines = glyph::render(reading.kanji);
             Paragraph::new(rendered_kanji_lines.join("\n"))
                 .block(kanji_block)
                 .centered()
                 .render(col, buf);
+            self.clickables.push((col, Selection::Kanji(idx)));
         }
     }
 
-    fn render_furigana(&self, area: Rect, buf: &mut Buffer) {
+    fn render_furigana(&mut self, area: Rect, buf: &mut Buffer) {
         if self.furigana_revealed {
             let num_kanjis = self.word.readings.len();
             let outer_layout = Layout::horizontal(
@@ -213,6 +225,7 @@ impl App {
                     .block(block)
                     .centered()
                     .render(col, buf);
+                self.clickables.push((col, Selection::Furigana(idx)));
             }
         } else {
             Paragraph::new("<furigana is hidden>")
@@ -239,7 +252,7 @@ impl App {
     }
 }
 
-impl Widget for &App {
+impl Widget for &mut App {
     /// UI layout
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
@@ -248,33 +261,28 @@ impl Widget for &App {
         let intructions = Line::from(vec![
             "<f>".into(),
             " ".into(),
-            "reveal furigana".blue().into(),
+            "reveal furigana".blue(),
             " | ".into(),
             "<t>".into(),
             " ".into(),
-            "reveal translations".blue().into(),
+            "reveal translations".blue(),
             " | ".into(),
             "<left, right, up, down arrows>".into(),
             " ".into(),
-            "navigation".green().into(),
+            "navigation".green(),
             " | ".into(),
             "<enter>".into(),
             " ".into(),
-            "select".green().into(),
+            "select".green(),
             " | ".into(),
             "<q, ^C>".into(),
             " ".into(),
-            "exit".red().into(),
+            "exit".red(),
             " | ".into(),
             "<h>".into(),
             " ".into(),
-            "help".red().into(),
+            "help".red(),
         ]);
-        // whole screen
-        let outer_layout = Layout::default()
-            .direction(ratatui::layout::Direction::Vertical)
-            .constraints([Constraint::Fill(0)])
-            .split(area)[0];
 
         let rows = Layout::vertical([
             Constraint::Max(HEIGHT_SYMBOLS as u16 + 2), // word
@@ -282,7 +290,7 @@ impl Widget for &App {
             Constraint::Fill(1),                        // translations
         ])
         .margin(1)
-        .split(outer_layout)
+        .split(area)
         .to_vec();
 
         // outer block
