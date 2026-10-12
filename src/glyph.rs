@@ -51,12 +51,12 @@ fn to_braille(dots: [[bool; WIDTH_PX]; HEIGHT_PX]) -> Vec<String> {
             (0..WIDTH_SYMBOLS)
                 .map(|cx| {
                     let mut b = 0;
-                    for dy in 0..SYMBOL_HEIGHT_DOTS {
-                        for dx in 0..SYMBOL_WIDTH_DOTS {
+                    for (dy, row) in BITS.iter().enumerate() {
+                        for (dx, bit) in row.iter().enumerate() {
                             let y_px = cy * SYMBOL_HEIGHT_DOTS + dy;
                             let x_px = cx * SYMBOL_WIDTH_DOTS + dx;
                             if dots[y_px][x_px] {
-                                b |= BITS[dy][dx];
+                                b |= *bit;
                             }
                         }
                     }

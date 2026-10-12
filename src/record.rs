@@ -1,7 +1,7 @@
 //! word record representation
 //!
 
-use crate::DATABASE;
+use crate::database::DATABASE;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub(crate) struct Word {

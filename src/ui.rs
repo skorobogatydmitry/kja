@@ -1,6 +1,6 @@
 /// Mouse event types to handle
 #[derive(Clone)]
-pub(crate) enum UiEvent {
+pub(crate) enum Event {
     NextWord(Selection),
     RevealFurigana,
     RevealTranslation,
