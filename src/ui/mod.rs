@@ -1,1 +1,1 @@
-pub(crate) mod add_kanji;
+pub(crate) mod events;

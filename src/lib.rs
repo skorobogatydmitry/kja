@@ -17,6 +17,7 @@ use crate::{
     database::DATABASE,
     glyph::{HEIGHT_SYMBOLS, WIDTH_SYMBOLS},
     record::Word,
+    ui::events::{Selection, UiEvent},
 };
 
 pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
@@ -24,18 +25,7 @@ pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_
 mod database;
 mod glyph;
 mod record;
-
-#[derive(Debug, Clone)]
-enum Selection {
-    Kanji(usize),
-    Furigana(usize),
-}
-
-impl Default for Selection {
-    fn default() -> Self {
-        Self::Kanji(0)
-    }
-}
+mod ui;
 
 #[derive(Default)]
 pub struct App {
@@ -44,7 +34,7 @@ pub struct App {
     translation_revealed: bool,
     exit: bool,
     selected_item: Selection,
-    clickables: Vec<(Rect, Selection)>,
+    clickables: Vec<(Rect, UiEvent)>,
 }
 
 impl App {
@@ -101,14 +91,18 @@ impl App {
         match mouse_event.kind {
             MouseEventKind::Down(MouseButton::Left) => {
                 let position = Position::new(mouse_event.column, mouse_event.row);
-                let selection = self
+                let event = self
                     .clickables
                     .iter()
                     .find(|(rect, _s)| rect.contains(position))
                     .map(|(_rect, s)| s)
                     .cloned();
-                if let Some(s) = selection {
-                    self.apply_selection(&s);
+                if let Some(e) = event {
+                    match e {
+                        UiEvent::NextWord(s) => self.apply_selection(&s),
+                        UiEvent::RevealFurigana => self.furigana_revealed = true,
+                        UiEvent::RevealTranslation => self.translation_revealed = true,
+                    }
                 }
             }
             _ => (), // TODO: log
@@ -198,7 +192,8 @@ impl App {
                 .block(kanji_block)
                 .centered()
                 .render(col, buf);
-            self.clickables.push((col, Selection::Kanji(idx)));
+            self.clickables
+                .push((col, UiEvent::NextWord(Selection::Kanji(idx))));
         }
     }
 
@@ -225,17 +220,19 @@ impl App {
                     .block(block)
                     .centered()
                     .render(col, buf);
-                self.clickables.push((col, Selection::Furigana(idx)));
+                self.clickables
+                    .push((col, UiEvent::NextWord(Selection::Furigana(idx))));
             }
         } else {
             Paragraph::new("<furigana is hidden>")
                 .style(Style::new().bg(ratatui::style::Color::DarkGray))
                 .centered()
                 .render(area, buf);
+            self.clickables.push((area, UiEvent::RevealFurigana));
         }
     }
 
-    fn render_translations(&self, area: Rect, buf: &mut Buffer) {
+    fn render_translations(&mut self, area: Rect, buf: &mut Buffer) {
         let paragraph = self
             .translation_revealed
             .then_some(self.word.translations.clone())
@@ -249,6 +246,8 @@ impl App {
             .block(Block::bordered())
             .centered()
             .render(area, buf);
+
+        self.clickables.push((area, UiEvent::RevealTranslation));
     }
 }
 
