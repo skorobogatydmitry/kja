@@ -14,3 +14,4 @@ rand = "0.10.3"
 ratatui = "0.30.2"
 refinery = { version = "0.9.2", features = ["rusqlite"] }
 rusqlite = { version = "0.39", features = ["bundled"] }
+strum = "0.28.0"

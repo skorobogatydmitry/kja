@@ -5,6 +5,7 @@ use crossterm::event::{
     MouseEventKind,
 };
 use ratatui::{DefaultTerminal, layout::Position};
+use strum::FromRepr;
 
 pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
@@ -14,16 +15,19 @@ mod record;
 mod screen;
 mod ui;
 
-#[derive(Default)]
+#[repr(u32)]
+#[derive(Default, FromRepr)]
 enum Screen {
     #[default]
-    Main,
+    Main = 1,
+    AddKanji = 2,
 }
 
 #[derive(Default)]
 pub struct App {
     current_screen: Screen,
     main_screen: screen::main::MainScreen,
+    add_kanji_screen: screen::add_kanji::Screen,
     exit: bool,
 }
 
@@ -39,13 +43,9 @@ impl App {
 
     /// frame re-drawer
     fn draw(&mut self, terminal: &mut DefaultTerminal) -> anyhow::Result<()> {
-        terminal.draw(|frame| {
-            frame.render_widget(
-                match self.current_screen {
-                    Screen::Main => &mut self.main_screen,
-                },
-                frame.area(),
-            );
+        terminal.draw(|frame| match self.current_screen {
+            Screen::Main => frame.render_widget(&mut self.main_screen, frame.area()),
+            Screen::AddKanji => frame.render_widget(&mut self.add_kanji_screen, frame.area()),
         })?;
         Ok(())
     }
@@ -65,12 +65,22 @@ impl App {
     /// event handlers router
     fn handle_key_event(&mut self, event: KeyEvent) -> anyhow::Result<()> {
         match (event.code, event.modifiers) {
-            (KeyCode::Char('q'), _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-                self.exit = true
+            (KeyCode::Char('c'), KeyModifiers::CONTROL) => self.exit = true,
+            other_keypress => {
+                // all numbers are reserved to switch screens
+                if let KeyCode::Char(ch) = other_keypress.0 {
+                    if ch.is_digit(10) {
+                        let digit = ch.to_digit(10).unwrap();
+                        if let Some(new_screen) = Screen::from_repr(digit) {
+                            self.current_screen = new_screen
+                        }
+                    }
+                }
+                match self.current_screen {
+                    Screen::Main => self.main_screen.handle_key_event(other_keypress),
+                    Screen::AddKanji => self.add_kanji_screen.handle_key_event(other_keypress),
+                }
             }
-            etc => match self.current_screen {
-                Screen::Main => self.main_screen.handle_key_event(etc),
-            },
         }
         Ok(())
     }
@@ -80,6 +90,7 @@ impl App {
             let position = Position::new(mouse_event.column, mouse_event.row);
             match self.current_screen {
                 Screen::Main => self.main_screen.handle_mouse_event(position),
+                Screen::AddKanji => self.add_kanji_screen.handle_mouse_event(position),
             }
         }
 

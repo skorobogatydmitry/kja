@@ -57,12 +57,12 @@ impl MainScreen {
     }
 
     fn goto_next_right(&mut self) {
-        let kanjis_in_word = self.word.readings.len() - 1;
+        let last_kanji_idx = self.word.readings.len() - 1;
         self.selected_item = match self.selected_item {
             ui::Selection::Furigana(n) => {
-                ui::Selection::Furigana(std::cmp::min(kanjis_in_word, n + 1))
+                ui::Selection::Furigana(std::cmp::min(last_kanji_idx, n + 1))
             }
-            ui::Selection::Kanji(n) => ui::Selection::Kanji(std::cmp::min(kanjis_in_word, n + 1)),
+            ui::Selection::Kanji(n) => ui::Selection::Kanji(std::cmp::min(last_kanji_idx, n + 1)),
         }
     }
 
@@ -209,6 +209,10 @@ impl Widget for &mut MainScreen {
     {
         self.clickables = vec![];
         let intructions = Line::from(vec![
+            "<1..9>".into(),
+            " ".into(),
+            "change screen".blue(),
+            " | ".into(),
             "<f>".into(),
             " ".into(),
             "reveal furigana".blue(),
@@ -225,7 +229,7 @@ impl Widget for &mut MainScreen {
             " ".into(),
             "select".green(),
             " | ".into(),
-            "<q, ^C>".into(),
+            "<^C>".into(),
             " ".into(),
             "exit".red(),
             " | ".into(),
@@ -245,7 +249,7 @@ impl Widget for &mut MainScreen {
 
         // outer block
         Block::bordered()
-            .title(NAME_VERSION)
+            .title(format!("{NAME_VERSION} - main"))
             .title_bottom(intructions)
             .render(area, buf);
 

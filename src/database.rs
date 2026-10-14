@@ -34,6 +34,10 @@ pub(super) struct Database {
 }
 
 impl Database {
+    /// add a new word to the database
+    pub(super) fn add_word(&mut self, _new_word: Word) -> anyhow::Result<()> {
+        todo!()
+    }
     /// get a random word
     pub(super) fn random_word(&mut self) -> Word {
         let word_id = self

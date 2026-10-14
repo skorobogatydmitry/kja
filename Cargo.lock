@@ -941,6 +941,7 @@ dependencies = [
  "ratatui",
  "refinery",
  "rusqlite",
+ "strum",
 ]
 
 [[package]]

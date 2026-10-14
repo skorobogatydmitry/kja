@@ -1,6 +1,8 @@
 //! word record representation
 //!
 
+use std::vec::Drain;
+
 use crate::database::DATABASE;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -8,6 +10,27 @@ pub(crate) struct Word {
     // TODO: words like きょう　/ 今日
     pub readings: Vec<KanjiReading>,
     pub translations: Vec<String>,
+}
+
+impl Word {
+    /// make a word from list of kanjis and readings
+    pub fn from_input(
+        kanjis: Drain<char>,
+        furigana: Drain<String>,
+        translations: Drain<String>,
+    ) -> Self {
+        let readings = kanjis
+            .zip(furigana)
+            .map(|(kj, fg)| KanjiReading {
+                kanji: kj.clone(),
+                furigana: fg.clone(),
+            })
+            .collect();
+        Self {
+            readings,
+            translations: translations.collect(),
+        }
+    }
 }
 
 impl Default for Word {
