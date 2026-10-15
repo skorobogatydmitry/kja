@@ -10,6 +10,8 @@ use ratatui::{
 
 use crate::{NAME_VERSION, database::DATABASE, record::Word, ui};
 
+static FURIGANA_PLACEHOLDER: &str = "<furigana>";
+
 #[derive(Clone)]
 enum Event {
     Focus(Selection),
@@ -40,29 +42,6 @@ pub(crate) struct Screen {
 }
 
 impl Screen {
-    /// takes the next word as by the selected kanji / furigana
-    fn apply_selection(&mut self, selection: &ui::Selection) {
-        // match selection {
-        //     ui::Selection::Kanji(idx) => {
-        //         let reading = &self.word.readings[*idx];
-        //         self.replace_word(
-        //             DATABASE
-        //                 .lock()
-        //                 .expect("DB is poisoned!")
-        //                 .next_by_kanji(reading.kanji),
-        //         );
-        //     }
-        //     ui::Selection::Furigana(idx) => {
-        //         self.replace_word(
-        //             DATABASE
-        //                 .lock()
-        //                 .expect("DB is poisoned!")
-        //                 .next_by_reading(&self.word.readings[*idx]),
-        //         );
-        //     }
-        // }
-    }
-
     fn goto_next_left(&mut self) {
         self.selected_item = match self.selected_item {
             Selection::Kanji(n) => Selection::Kanji(n.saturating_sub(1)),
@@ -75,7 +54,9 @@ impl Screen {
     fn goto_next_right(&mut self) {
         self.selected_item = match self.selected_item {
             Selection::Kanji(n) => Selection::Kanji(std::cmp::min(n + 1, self.kanjis.len())),
-            Selection::Furigana(n) => Selection::Furigana(std::cmp::min(n + 1, self.kanjis.len())),
+            Selection::Furigana(n) => {
+                Selection::Furigana(std::cmp::min(n + 1, self.kanjis.len().saturating_sub(1)))
+            }
             Selection::Translation(n) => {
                 if n == self.translations.len() {
                     Selection::AddWord
@@ -89,7 +70,9 @@ impl Screen {
 
     fn goto_next_row(&mut self) {
         self.selected_item = match self.selected_item {
-            Selection::Kanji(n) => Selection::Furigana(n),
+            Selection::Kanji(n) => {
+                Selection::Furigana(std::cmp::min(n, self.kanjis.len().saturating_sub(1)))
+            }
             Selection::Furigana(n) => {
                 if n > self.translations.len() {
                     Selection::AddWord
@@ -108,11 +91,42 @@ impl Screen {
                 Selection::Translation(std::cmp::min(self.translations.len(), n))
             }
             Selection::Furigana(n) => Selection::Kanji(n),
-            Selection::Translation(n) => Selection::Furigana(std::cmp::min(self.kanjis.len(), n)),
+            Selection::Translation(n) => {
+                Selection::Furigana(std::cmp::min(self.kanjis.len().saturating_sub(1), n))
+            }
             Selection::AddWord => Selection::Furigana(std::cmp::min(
                 self.kanjis.len(),
                 self.translations.len() + 1,
             )),
+        }
+    }
+
+    fn next_field(&mut self) {
+        self.selected_item = match self.selected_item {
+            Selection::Kanji(n) => {
+                if n < self.kanjis.len() {
+                    Selection::Kanji(n + 1)
+                } else {
+                    Selection::Furigana(0)
+                }
+            }
+            Selection::Furigana(n) => {
+                if n < self.kanjis.len().saturating_sub(1) {
+                    Selection::Furigana(n + 1)
+                } else {
+                    Selection::Translation(0)
+                }
+            }
+            Selection::Translation(n) => {
+                if n == self.translations.len() {
+                    Selection::AddWord
+                } else if n < self.translations.len() {
+                    Selection::Translation(n + 1)
+                } else {
+                    Selection::Kanji(0)
+                }
+            }
+            Selection::AddWord => Selection::Kanji(0),
         }
     }
 
@@ -130,35 +144,6 @@ impl Screen {
         {
             Ok(_) => (),   // TODO: log
             Err(_e) => (), // TODO: log
-        }
-    }
-
-    fn next_field(&mut self) {
-        self.selected_item = match self.selected_item {
-            Selection::Kanji(n) => {
-                if n < self.kanjis.len() {
-                    Selection::Kanji(n + 1)
-                } else {
-                    Selection::Furigana(0)
-                }
-            }
-            Selection::Furigana(n) => {
-                if n < self.kanjis.len() {
-                    Selection::Furigana(n + 1)
-                } else {
-                    Selection::Translation(0)
-                }
-            }
-            Selection::Translation(n) => {
-                if n == self.translations.len() {
-                    Selection::AddWord
-                } else if n < self.translations.len() {
-                    Selection::Translation(n + 1)
-                } else {
-                    Selection::Kanji(0)
-                }
-            }
-            Selection::AddWord => Selection::Kanji(0),
         }
     }
 
@@ -229,24 +214,12 @@ impl Screen {
                 .push((col, Event::Focus(Selection::Furigana(idx))));
         }
 
-        let block = match self.selected_item {
-            Selection::Furigana(n) if n == num_furiganas => {
-                Block::bordered().border_type(ratatui::widgets::BorderType::QuadrantOutside)
-            }
-            _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
-        };
-
-        Paragraph::new("__")
-            .block(block)
-            .centered()
-            .render(last_col, buf);
-        self.clickables
-            .push((last_col, Event::Focus(Selection::Furigana(num_furiganas))));
+        Paragraph::new("").centered().render(last_col, buf);
     }
 
     fn render_translations(&mut self, area: Rect, buf: &mut Buffer) {
         let num_translations = self.translations.len();
-        let mut constraints = (0..=num_translations + 1)
+        let mut constraints = (0..=num_translations)
             .map(|_| Constraint::Fill(1))
             .collect::<Vec<Constraint>>();
         constraints.push(Constraint::Percentage(10));
@@ -286,8 +259,10 @@ impl Screen {
             .block(add_translation_block)
             .centered()
             .render(add_translation_col, buf);
-        self.clickables
-            .push((add_translation_col, Event::Focus(Selection::AddWord)));
+        self.clickables.push((
+            add_translation_col,
+            Event::Focus(Selection::Translation(num_translations)),
+        ));
 
         let button_block = match self.selected_item {
             Selection::AddWord => {
@@ -315,6 +290,8 @@ impl Screen {
             (KeyCode::Right, _) => self.goto_next_right(),
             (KeyCode::Enter, _) => self.add_word(),
             (KeyCode::Tab, _) => self.next_field(),
+            (KeyCode::Backspace, _) => self.remove_selection(),
+            (KeyCode::Char(ch), _) => self.add_char(ch),
             _ => (), // TODO: log
         }
     }
@@ -328,9 +305,51 @@ impl Screen {
             .cloned();
         if let Some(e) = event {
             match e {
-                Event::Focus(Selection::AddWord) => todo!(),
-                _ => todo!(),
+                Event::Focus(Selection::AddWord) => self.add_word(),
+                Event::Focus(selection) => self.selected_item = selection,
             }
+        }
+    }
+
+    fn remove_selection(&mut self) {
+        match self.selected_item {
+            Selection::Kanji(n) => {
+                if n < self.kanjis.len() {
+                    self.kanjis.remove(n);
+                    self.furiganas.remove(n);
+                }
+            }
+            Selection::Translation(n) => {
+                self.translations.remove(n);
+            }
+            _ => (),
+        }
+    }
+
+    fn add_char(&mut self, ch: char) {
+        match self.selected_item {
+            Selection::AddWord => self.add_word(),
+            Selection::Kanji(idx) => {
+                // TODO: is_kanji
+                if idx >= self.kanjis.len() {
+                    self.kanjis.push(ch);
+                    self.furiganas.push(FURIGANA_PLACEHOLDER.to_string());
+                } else {
+                    self.kanjis[idx] = ch;
+                }
+            }
+            Selection::Furigana(idx) => {
+                let furigana = self.furiganas.get_mut(idx).unwrap();
+                if furigana == FURIGANA_PLACEHOLDER {
+                    *furigana = ch.to_string();
+                } else {
+                    furigana.push(ch);
+                }
+            }
+            Selection::Translation(idx) => match self.translations.get_mut(idx) {
+                Some(translation) => translation.push(ch),
+                None => (),
+            },
         }
     }
 }

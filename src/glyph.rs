@@ -23,6 +23,11 @@ static JP_FONT: LazyLock<Font> = LazyLock::new(|| {
     Font::from_bytes(FONT_BYTES, FontSettings::default()).expect("cannot load font")
 });
 
+/// check if the character is kanji
+pub(crate) fn is_kanji(candidate: char) -> bool {
+    todo!()
+}
+
 pub(crate) fn render(kanji: char) -> Vec<String> {
     let dots = glyph_dots(kanji);
     to_braille(dots)

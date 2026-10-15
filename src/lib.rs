@@ -72,8 +72,9 @@ impl App {
                     if ch.is_digit(10) {
                         let digit = ch.to_digit(10).unwrap();
                         if let Some(new_screen) = Screen::from_repr(digit) {
-                            self.current_screen = new_screen
+                            self.current_screen = new_screen;
                         }
+                        return Ok(());
                     }
                 }
                 match self.current_screen {
