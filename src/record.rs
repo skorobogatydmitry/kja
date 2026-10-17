@@ -22,7 +22,7 @@ impl Word {
         let readings = kanjis
             .zip(furigana)
             .map(|(kj, fg)| KanjiReading {
-                kanji: kj.clone(),
+                kanji: kj,
                 furigana: fg.clone(),
             })
             .collect();

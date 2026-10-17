@@ -13,23 +13,42 @@ use crate::{
     database::DATABASE,
     glyph::{self, HEIGHT_SYMBOLS, WIDTH_SYMBOLS},
     record::Word,
-    ui,
 };
+
+#[derive(Clone)]
+pub(crate) enum Event {
+    NextWord(Selection),
+    RevealFurigana,
+    RevealTranslation,
+}
+
+//
+#[derive(Debug, Clone)]
+pub(crate) enum Selection {
+    Kanji(usize),
+    Furigana(usize),
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Self::Kanji(0)
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct MainScreen {
     word: Word,
     furigana_revealed: bool,
     translation_revealed: bool,
-    selected_item: ui::Selection,
-    clickables: Vec<(Rect, ui::Event)>,
+    selected_item: Selection,
+    clickables: Vec<(Rect, Event)>,
 }
 
 impl MainScreen {
     /// takes the next word as by the selected kanji / furigana
-    fn apply_selection(&mut self, selection: &ui::Selection) {
+    fn apply_selection(&mut self, selection: &Selection) {
         match selection {
-            ui::Selection::Kanji(idx) => {
+            Selection::Kanji(idx) => {
                 let reading = &self.word.readings[*idx];
                 self.replace_word(
                     DATABASE
@@ -38,7 +57,7 @@ impl MainScreen {
                         .next_by_kanji(reading.kanji),
                 );
             }
-            ui::Selection::Furigana(idx) => {
+            Selection::Furigana(idx) => {
                 self.replace_word(
                     DATABASE
                         .lock()
@@ -51,26 +70,24 @@ impl MainScreen {
 
     fn goto_next_left(&mut self) {
         self.selected_item = match self.selected_item {
-            ui::Selection::Furigana(n) => ui::Selection::Furigana(n.saturating_sub(1)),
-            ui::Selection::Kanji(n) => ui::Selection::Kanji(n.saturating_sub(1)),
+            Selection::Furigana(n) => Selection::Furigana(n.saturating_sub(1)),
+            Selection::Kanji(n) => Selection::Kanji(n.saturating_sub(1)),
         }
     }
 
     fn goto_next_right(&mut self) {
         let last_kanji_idx = self.word.readings.len() - 1;
         self.selected_item = match self.selected_item {
-            ui::Selection::Furigana(n) => {
-                ui::Selection::Furigana(std::cmp::min(last_kanji_idx, n + 1))
-            }
-            ui::Selection::Kanji(n) => ui::Selection::Kanji(std::cmp::min(last_kanji_idx, n + 1)),
+            Selection::Furigana(n) => Selection::Furigana(std::cmp::min(last_kanji_idx, n + 1)),
+            Selection::Kanji(n) => Selection::Kanji(std::cmp::min(last_kanji_idx, n + 1)),
         }
     }
 
     fn goto_next_row(&mut self) {
         if self.furigana_revealed {
             self.selected_item = match self.selected_item {
-                ui::Selection::Furigana(n) => ui::Selection::Kanji(n),
-                ui::Selection::Kanji(n) => ui::Selection::Furigana(n),
+                Selection::Furigana(n) => Selection::Kanji(n),
+                Selection::Kanji(n) => Selection::Furigana(n),
             }
         }
     }
@@ -84,7 +101,7 @@ impl MainScreen {
         self.word = new_word;
         self.furigana_revealed = false;
         self.translation_revealed = false;
-        self.selected_item = ui::Selection::default();
+        self.selected_item = Selection::default();
     }
 
     fn render_word(&mut self, area: Rect, buf: &mut Buffer) {
@@ -98,7 +115,7 @@ impl MainScreen {
 
         for (idx, (reading, col)) in self.word.readings.iter().zip(outer_layout).enumerate() {
             let kanji_block = match self.selected_item {
-                ui::Selection::Kanji(n) if n == idx => {
+                Selection::Kanji(n) if n == idx => {
                     Block::bordered().border_type(ratatui::widgets::BorderType::QuadrantOutside)
                 }
                 _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
@@ -110,7 +127,7 @@ impl MainScreen {
                 .centered()
                 .render(col, buf);
             self.clickables
-                .push((col, ui::Event::NextWord(ui::Selection::Kanji(idx))));
+                .push((col, Event::NextWord(Selection::Kanji(idx))));
         }
     }
 
@@ -127,7 +144,7 @@ impl MainScreen {
 
             for (idx, (reading, col)) in self.word.readings.iter().zip(outer_layout).enumerate() {
                 let block = match self.selected_item {
-                    ui::Selection::Furigana(n) if n == idx => {
+                    Selection::Furigana(n) if n == idx => {
                         Block::bordered().border_type(ratatui::widgets::BorderType::QuadrantOutside)
                     }
                     _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
@@ -138,14 +155,14 @@ impl MainScreen {
                     .centered()
                     .render(col, buf);
                 self.clickables
-                    .push((col, ui::Event::NextWord(ui::Selection::Furigana(idx))));
+                    .push((col, Event::NextWord(Selection::Furigana(idx))));
             }
         } else {
             Paragraph::new("<furigana is hidden>")
                 .style(Style::new().bg(ratatui::style::Color::DarkGray))
                 .centered()
                 .render(area, buf);
-            self.clickables.push((area, ui::Event::RevealFurigana));
+            self.clickables.push((area, Event::RevealFurigana));
         }
     }
 
@@ -164,7 +181,7 @@ impl MainScreen {
             .centered()
             .render(area, buf);
 
-        self.clickables.push((area, ui::Event::RevealTranslation));
+        self.clickables.push((area, Event::RevealTranslation));
     }
 
     pub(crate) fn handle_key_event(
@@ -193,9 +210,9 @@ impl MainScreen {
             .cloned();
         if let Some(e) = event {
             match e {
-                ui::Event::NextWord(s) => self.apply_selection(&s),
-                ui::Event::RevealFurigana => self.furigana_revealed = true,
-                ui::Event::RevealTranslation => self.translation_revealed = true,
+                Event::NextWord(s) => self.apply_selection(&s),
+                Event::RevealFurigana => self.furigana_revealed = true,
+                Event::RevealTranslation => self.translation_revealed = true,
             }
         }
     }

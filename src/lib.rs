@@ -13,7 +13,6 @@ mod database;
 mod glyph;
 mod record;
 mod screen;
-mod ui;
 
 #[repr(u32)]
 #[derive(Default, FromRepr)]
@@ -68,15 +67,14 @@ impl App {
             (KeyCode::Char('c'), KeyModifiers::CONTROL) => self.exit = true,
             other_keypress => {
                 // all numbers are reserved to switch screens
-                if let KeyCode::Char(ch) = other_keypress.0 {
-                    if ch.is_digit(10) {
+                if let KeyCode::Char(ch) = other_keypress.0
+                    && ch.is_ascii_digit() {
                         let digit = ch.to_digit(10).unwrap();
                         if let Some(new_screen) = Screen::from_repr(digit) {
                             self.current_screen = new_screen;
                         }
                         return Ok(());
                     }
-                }
                 match self.current_screen {
                     Screen::Main => self.main_screen.handle_key_event(other_keypress),
                     Screen::AddKanji => self.add_kanji_screen.handle_key_event(other_keypress),

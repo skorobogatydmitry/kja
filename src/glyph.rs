@@ -24,7 +24,7 @@ static JP_FONT: LazyLock<Font> = LazyLock::new(|| {
 });
 
 /// check if the character is kanji
-pub(crate) fn is_kanji(candidate: char) -> bool {
+pub(crate) fn is_kanji(_candidate: char) -> bool {
     todo!()
 }
 

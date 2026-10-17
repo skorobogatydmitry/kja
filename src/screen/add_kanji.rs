@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-use crate::{NAME_VERSION, database::DATABASE, record::Word, ui};
+use crate::{NAME_VERSION, database::DATABASE, record::Word};
 
 static FURIGANA_PLACEHOLDER: &str = "<furigana>";
 
@@ -346,10 +346,7 @@ impl Screen {
                     furigana.push(ch);
                 }
             }
-            Selection::Translation(idx) => match self.translations.get_mut(idx) {
-                Some(translation) => translation.push(ch),
-                None => (),
-            },
+            Selection::Translation(idx) => if let Some(translation) = self.translations.get_mut(idx) { translation.push(ch) },
         }
     }
 }
