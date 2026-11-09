@@ -1,6 +1,6 @@
 //! drawing kanjis on TTY
 
-use std::sync::LazyLock;
+use std::{collections::HashSet, sync::LazyLock};
 
 use fontdue::{Font, FontSettings};
 use icu_properties::{CodePointMapData, CodePointMapDataBorrowed, props::Script};
@@ -30,6 +30,26 @@ static JP_FONT: LazyLock<Font> = LazyLock::new(|| {
 /// check if the character is kanji
 pub(crate) fn is_kanji(candidate: char) -> bool {
     CODE_POINT_MAP_DATA.get(candidate) == Script::Han
+}
+
+/// check if the character is kana
+pub(crate) fn is_kana(candidate: char) -> bool {
+    CODE_POINT_MAP_DATA.get(candidate) == Script::Hiragana
+        || CODE_POINT_MAP_DATA.get(candidate) == Script::Katakana
+}
+
+/// check that the word contains only 1 type of kana
+pub(crate) fn is_consistent_kana(candidate: &str) -> bool {
+    let char_types = candidate
+        .chars()
+        .map(|ch| CODE_POINT_MAP_DATA.get(ch))
+        .collect::<HashSet<_>>();
+    if char_types.len() != 1 {
+        return false;
+    } else {
+        let uniq_type = char_types.into_iter().next().unwrap();
+        uniq_type == Script::Hiragana || uniq_type == Script::Katakana
+    }
 }
 
 pub(crate) fn render(kanji: char) -> Vec<String> {

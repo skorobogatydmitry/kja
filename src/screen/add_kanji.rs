@@ -8,9 +8,16 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-use crate::{database::Database, glyph::is_kanji, message, record::Word, screen::Screen};
+use crate::{
+    database::Database,
+    glyph::{is_consistent_kana, is_kana, is_kanji},
+    message,
+    record::Word,
+    screen::Screen,
+};
 
 static FURIGANA_PLACEHOLDER: &str = "<furigana>";
+static RIGHTMOST_SPACE_P: u16 = 20;
 
 #[derive(Clone)]
 enum Event {
@@ -71,33 +78,47 @@ impl AddKanji {
     fn goto_next_row(&mut self) {
         self.selected_item = match self.selected_item {
             Selection::Kanji(n) => {
-                Selection::Furigana(std::cmp::min(n, self.kanjis.len().saturating_sub(1)))
-            }
-            Selection::Furigana(n) => {
-                if n > self.translations.len() {
-                    Selection::AddWord
-                } else {
+                if self.kanjis.len() == 0 {
                     Selection::Translation(std::cmp::min(self.translations.len(), n))
+                } else {
+                    Selection::Furigana(std::cmp::min(self.furiganas.len().saturating_sub(1), n))
                 }
             }
+            Selection::Furigana(n) => {
+                Selection::Translation(std::cmp::min(self.translations.len(), n))
+            }
             Selection::Translation(_n) => Selection::Kanji(0),
-            Selection::AddWord => Selection::Kanji(0),
+            Selection::AddWord => Selection::Kanji(self.kanjis.len()),
         }
     }
 
     fn goto_prev_row(&mut self) {
         self.selected_item = match self.selected_item {
             Selection::Kanji(n) => {
-                Selection::Translation(std::cmp::min(self.translations.len(), n))
+                if n == self.kanjis.len() {
+                    Selection::AddWord
+                } else {
+                    Selection::Translation(std::cmp::min(self.translations.len(), n))
+                }
             }
             Selection::Furigana(n) => Selection::Kanji(n),
             Selection::Translation(n) => {
-                Selection::Furigana(std::cmp::min(self.kanjis.len().saturating_sub(1), n))
+                if self.furiganas.len() == 0 {
+                    Selection::Kanji(n)
+                } else {
+                    Selection::Furigana(std::cmp::min(self.furiganas.len().saturating_sub(1), n))
+                }
             }
-            Selection::AddWord => Selection::Furigana(std::cmp::min(
-                self.kanjis.len(),
-                self.translations.len() + 1,
-            )),
+            Selection::AddWord => {
+                if self.furiganas.len() == 0 {
+                    Selection::Kanji(self.kanjis.len())
+                } else {
+                    Selection::Furigana(std::cmp::min(
+                        self.furiganas.len().saturating_sub(1),
+                        self.translations.len() + 1,
+                    ))
+                }
+            }
         }
     }
 
@@ -132,6 +153,16 @@ impl AddKanji {
 
     fn add_word(&mut self) {
         if self.kanjis.len() != self.furiganas.len() || self.kanjis.len() < 1 {
+            message::show("Too few kanjis to add word".to_string());
+            return;
+        }
+
+        if self
+            .furiganas
+            .iter()
+            .any(|f| f == FURIGANA_PLACEHOLDER || !is_consistent_kana(f))
+        {
+            message::show("Not all furiganas filled or inconsistent kana".to_string());
             return;
         }
 
@@ -148,7 +179,11 @@ impl AddKanji {
 
     fn render_kanjis(&mut self, area: Rect, buf: &mut Buffer) {
         let num_kanjis = self.kanjis.len();
-        let mut outer_layout = Layout::horizontal((0..=num_kanjis).map(|_| Constraint::Fill(1)))
+        let mut constraints = (0..num_kanjis)
+            .map(|_i| Constraint::Fill(1))
+            .collect::<Vec<Constraint>>();
+        constraints.push(Constraint::Percentage(RIGHTMOST_SPACE_P));
+        let mut outer_layout = Layout::horizontal(constraints)
             .spacing(3)
             .flex(ratatui::layout::Flex::Center)
             .split(area)
@@ -179,7 +214,7 @@ impl AddKanji {
             _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
         };
 
-        Paragraph::new("__")
+        Paragraph::new("<add kanji>")
             .block(kanji_block)
             .centered()
             .render(last_col, buf);
@@ -189,7 +224,11 @@ impl AddKanji {
 
     fn render_furigana(&mut self, area: Rect, buf: &mut Buffer) {
         let num_furiganas = self.furiganas.len();
-        let mut outer_layout = Layout::horizontal((0..=num_furiganas).map(|_| Constraint::Fill(1)))
+        let mut constraints = (0..num_furiganas)
+            .map(|_i| Constraint::Fill(1))
+            .collect::<Vec<Constraint>>();
+        constraints.push(Constraint::Percentage(RIGHTMOST_SPACE_P));
+        let mut outer_layout = Layout::horizontal(constraints)
             .spacing(3)
             .flex(ratatui::layout::Flex::Center)
             .split(area)
@@ -221,7 +260,7 @@ impl AddKanji {
         let mut constraints = (0..=num_translations)
             .map(|_| Constraint::Fill(1))
             .collect::<Vec<Constraint>>();
-        constraints.push(Constraint::Percentage(10));
+        constraints.push(Constraint::Percentage(RIGHTMOST_SPACE_P));
         let mut outer_layout = Layout::horizontal(constraints)
             .spacing(3)
             .flex(ratatui::layout::Flex::Center)
@@ -254,7 +293,7 @@ impl AddKanji {
             _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
         };
 
-        Paragraph::new("<+1 translation>")
+        Paragraph::new("<add translation>")
             .block(add_translation_block)
             .centered()
             .render(add_translation_col, buf);
@@ -322,7 +361,9 @@ impl AddKanji {
                 self.furiganas.get_mut(n).map(|f| f.pop());
             }
             Selection::Translation(n) => {
-                self.translations.remove(n);
+                if n < self.translations.len() {
+                    self.translations.remove(n);
+                }
             }
             _ => (),
         }
@@ -344,6 +385,10 @@ impl AddKanji {
                 }
             }
             Selection::Furigana(idx) => {
+                if !is_kana(ch) {
+                    message::show(format!("Only kana allowed, got {ch}"));
+                    return;
+                }
                 let furigana = self.furiganas.get_mut(idx).unwrap();
                 if furigana == FURIGANA_PLACEHOLDER {
                     *furigana = ch.to_string();
