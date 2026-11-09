@@ -3,7 +3,7 @@
 
 use std::vec::Drain;
 
-use crate::database::DATABASE;
+use crate::database::Database;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub(crate) struct Word {
@@ -35,10 +35,7 @@ impl Word {
 
 impl Default for Word {
     fn default() -> Self {
-        DATABASE
-            .lock()
-            .expect("database is poisoned!")
-            .random_word() // TODO: custom logic
+        Database::random_word() // TODO: custom logic
     }
 }
 

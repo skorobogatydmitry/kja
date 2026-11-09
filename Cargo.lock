@@ -928,13 +928,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "kj-assoc"
+name = "kja"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "crossterm",
  "env_logger",
  "fontdue",
+ "icu_properties",
  "log",
  "rakugaki",
  "rand 0.10.3",

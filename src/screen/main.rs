@@ -9,10 +9,10 @@ use ratatui::{
 };
 
 use crate::{
-    NAME_VERSION,
-    database::DATABASE,
+    database::Database,
     glyph::{self, HEIGHT_SYMBOLS, WIDTH_SYMBOLS},
     record::Word,
+    screen::Screen,
 };
 
 #[derive(Clone)]
@@ -50,20 +50,10 @@ impl MainScreen {
         match selection {
             Selection::Kanji(idx) => {
                 let reading = &self.word.readings[*idx];
-                self.replace_word(
-                    DATABASE
-                        .lock()
-                        .expect("DB is poisoned!")
-                        .next_by_kanji(reading.kanji),
-                );
+                self.replace_word(Database::next_by_kanji(reading.kanji));
             }
             Selection::Furigana(idx) => {
-                self.replace_word(
-                    DATABASE
-                        .lock()
-                        .expect("DB is poisoned!")
-                        .next_by_reading(&self.word.readings[*idx]),
-                );
+                self.replace_word(Database::next_by_reading(&self.word.readings[*idx]));
             }
         }
     }
@@ -266,12 +256,18 @@ impl Widget for &mut MainScreen {
 
         // outer block
         Block::bordered()
-            .title(format!("{NAME_VERSION} - main"))
+            .title(self.title())
             .title_bottom(intructions)
             .render(area, buf);
 
         self.render_word(rows[0], buf);
         self.render_furigana(rows[1], buf);
         self.render_translations(rows[2], buf);
+    }
+}
+
+impl crate::screen::Screen for MainScreen {
+    fn name(&self) -> &'static str {
+        "Main"
     }
 }

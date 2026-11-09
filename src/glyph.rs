@@ -3,6 +3,7 @@
 use std::sync::LazyLock;
 
 use fontdue::{Font, FontSettings};
+use icu_properties::{CodePointMapData, CodePointMapDataBorrowed, props::Script};
 
 pub static WIDTH_PX: usize = WIDTH_SYMBOLS * SYMBOL_WIDTH_DOTS;
 pub static HEIGHT_PX: usize = HEIGHT_SYMBOLS * SYMBOL_HEIGHT_DOTS;
@@ -15,6 +16,9 @@ pub static SYMBOL_HEIGHT_DOTS: usize = 4;
 
 pub static BRAILLE_START_OFFSET: u32 = 0x2800;
 
+static CODE_POINT_MAP_DATA: LazyLock<CodePointMapDataBorrowed<Script>> =
+    LazyLock::new(CodePointMapData::<Script>::new);
+
 // less readable in 25x25, 40x40 is min to make out compex kanjis
 pub static FONT_BYTES: &[u8] = include_bytes!("../res/KleeOne-Regular.ttf");
 /// this font is simple and could be made out from 25x25
@@ -24,8 +28,8 @@ static JP_FONT: LazyLock<Font> = LazyLock::new(|| {
 });
 
 /// check if the character is kanji
-pub(crate) fn is_kanji(_candidate: char) -> bool {
-    todo!()
+pub(crate) fn is_kanji(candidate: char) -> bool {
+    CODE_POINT_MAP_DATA.get(candidate) == Script::Han
 }
 
 pub(crate) fn render(kanji: char) -> Vec<String> {

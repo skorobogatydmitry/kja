@@ -2,7 +2,7 @@
 
 use std::{
     collections::HashSet,
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, Mutex, MutexGuard},
 };
 
 use log::warn;
@@ -35,26 +35,75 @@ pub(super) struct Database {
 
 impl Database {
     /// add a new word to the database
-    pub(super) fn add_word(&mut self, _new_word: Word) -> anyhow::Result<()> {
-        todo!()
-    }
-    /// get a random word
-    pub(super) fn random_word(&mut self) -> Word {
-        let word_id = self
+    pub(super) fn add_word(new_word: Word) -> anyhow::Result<u32> {
+        let mut db = Database::get();
+
+        let reading_ids = new_word
+            .readings
+            .into_iter()
+            .enumerate()
+            .map(|(idx, r)| (idx + 1, db.upsert_reading(r)))
+            .rev()
+            .collect::<Vec<(usize, u32)>>();
+
+        // TODO: check for dublicates
+
+        let new_word_id = db
             .connection
-            .prepare("select word_id from word_component order by random() limit 1")
-            .expect("cannot get random word")
-            .query_one([], |r| r.get::<_, u32>(0))
+            .query_one("select max(word_id) + 1 from word_component", [], |r| {
+                r.get::<_, u32>(0)
+            })
+            .unwrap();
+
+        let mut statement = db.connection
+            .prepare("insert into word_component(word_id,word_position,kanji_reading_id) values (?1, ?2, ?3)")
+            .unwrap();
+
+        reading_ids.into_iter().for_each(|(pos, reading_id)| {
+            statement
+                .execute([new_word_id, pos as u32, reading_id])
+                .unwrap();
+        });
+
+        Ok(new_word_id)
+    }
+
+    /// insert or get its id
+    fn upsert_reading(&mut self, reading: KanjiReading) -> u32 {
+        self
+            .connection
+            .query_one(
+                "insert into kanji_reading (kanji, reading) values (?1, ?2) on conflict do update set reading = excluded.reading returning id",
+                [
+                    reading.kanji.to_string().as_str(),
+                    reading.furigana.as_str(),
+                ],
+                |r| r.get::<_, u32>(0),
+            )
+            .expect("error upserting a new reading")
+    }
+
+    /// get a random word
+    pub(super) fn random_word() -> Word {
+        let mut db = Self::get();
+        let word_id = db
+            .connection
+            .query_one(
+                "select word_id from word_component order by random() limit 1",
+                [],
+                |r| r.get::<_, u32>(0),
+            )
             .expect("cannot parse random word id");
 
-        self.words_tail.insert(word_id);
-        self.fetch_word_by_id(word_id)
+        db.words_tail.insert(word_id);
+        db.fetch_word_by_id(word_id)
     }
 
     /// get next word with the same kanji (maybe different reading)
-    pub(super) fn next_by_kanji(&mut self, kanji: char) -> Word {
+    pub(super) fn next_by_kanji(kanji: char) -> Word {
         // TODO: exclude current word
-        let available_word_ids = self
+        let mut db = Self::get();
+        let available_word_ids = db
             .connection
             .prepare("select word_id from word_component where kanji_reading_id in (select id from kanji_reading where kanji = ?1)")
             .expect("cannot get word ids for kanji")
@@ -64,7 +113,7 @@ impl Database {
             .expect("cannot parse word ids");
 
         let unused_words = available_word_ids
-            .difference(&self.words_tail)
+            .difference(&db.words_tail)
             .cloned()
             .collect::<Vec<u32>>();
 
@@ -76,14 +125,15 @@ impl Database {
         }
         .expect("no available words for the kanji"); // TODO: always works, as soon as the current word is not excluded
 
-        self.words_tail.insert(word_id);
-        self.fetch_word_by_id(word_id)
+        db.words_tail.insert(word_id);
+        db.fetch_word_by_id(word_id)
     }
 
     /// get next word with the same kanji and its reading (maybe different reading)
-    pub(super) fn next_by_reading(&mut self, reading: &KanjiReading) -> Word {
+    pub(super) fn next_by_reading(reading: &KanjiReading) -> Word {
         // TODO: exclude current word
-        let available_word_ids = self
+        let mut db = Self::get();
+        let available_word_ids = db
             .connection
             .prepare("select word_id from word_component where kanji_reading_id in (select id from kanji_reading where kanji = ?1 and reading = ?2)")
             .expect("cannot get word ids for reading")
@@ -95,7 +145,7 @@ impl Database {
             .expect("cannot parse word ids");
 
         let unused_words = available_word_ids
-            .difference(&self.words_tail)
+            .difference(&db.words_tail)
             .cloned()
             .collect::<Vec<u32>>();
 
@@ -110,8 +160,8 @@ impl Database {
         }
         .expect("no available words for the reading"); // TODO: always works, as soon as the current word is not excluded
 
-        self.words_tail.insert(word_id);
-        self.fetch_word_by_id(word_id)
+        db.words_tail.insert(word_id);
+        db.fetch_word_by_id(word_id)
     }
 
     /// get word by ID from the database
@@ -145,5 +195,9 @@ impl Database {
             readings,
             translations,
         }
+    }
+
+    fn get() -> MutexGuard<'static, Database> {
+        DATABASE.lock().unwrap()
     }
 }

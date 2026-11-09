@@ -11,6 +11,7 @@ pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_
 
 mod database;
 mod glyph;
+mod message;
 mod record;
 mod screen;
 
@@ -26,7 +27,7 @@ enum Screen {
 pub struct App {
     current_screen: Screen,
     main_screen: screen::main::MainScreen,
-    add_kanji_screen: screen::add_kanji::Screen,
+    add_kanji_screen: screen::add_kanji::AddKanji,
     exit: bool,
 }
 
@@ -68,13 +69,14 @@ impl App {
             other_keypress => {
                 // all numbers are reserved to switch screens
                 if let KeyCode::Char(ch) = other_keypress.0
-                    && ch.is_ascii_digit() {
-                        let digit = ch.to_digit(10).unwrap();
-                        if let Some(new_screen) = Screen::from_repr(digit) {
-                            self.current_screen = new_screen;
-                        }
-                        return Ok(());
+                    && ch.is_ascii_digit()
+                {
+                    let digit = ch.to_digit(10).unwrap();
+                    if let Some(new_screen) = Screen::from_repr(digit) {
+                        self.current_screen = new_screen;
                     }
+                    return Ok(());
+                }
                 match self.current_screen {
                     Screen::Main => self.main_screen.handle_key_event(other_keypress),
                     Screen::AddKanji => self.add_kanji_screen.handle_key_event(other_keypress),

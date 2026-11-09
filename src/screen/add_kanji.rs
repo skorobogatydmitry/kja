@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-use crate::{NAME_VERSION, database::DATABASE, record::Word};
+use crate::{database::Database, glyph::is_kanji, message, record::Word, screen::Screen};
 
 static FURIGANA_PLACEHOLDER: &str = "<furigana>";
 
@@ -33,7 +33,7 @@ impl Default for Selection {
 }
 
 #[derive(Default)]
-pub(crate) struct Screen {
+pub(crate) struct AddKanji {
     kanjis: Vec<char>,
     furiganas: Vec<String>, // TODO: hint from DB
     translations: Vec<String>,
@@ -41,7 +41,7 @@ pub(crate) struct Screen {
     clickables: Vec<(Rect, Event)>,
 }
 
-impl Screen {
+impl AddKanji {
     fn goto_next_left(&mut self) {
         self.selected_item = match self.selected_item {
             Selection::Kanji(n) => Selection::Kanji(n.saturating_sub(1)),
@@ -131,19 +131,18 @@ impl Screen {
     }
 
     fn add_word(&mut self) {
-        // TODO: validate
+        if self.kanjis.len() != self.furiganas.len() || self.kanjis.len() < 1 {
+            return;
+        }
+
         let word = Word::from_input(
             self.kanjis.drain(..),
             self.furiganas.drain(..),
             self.translations.drain(..),
         );
-        match DATABASE
-            .lock()
-            .expect("database is poisoned")
-            .add_word(word)
-        {
-            Ok(_) => (),   // TODO: log
-            Err(_e) => (), // TODO: log
+        match Database::add_word(word) {
+            Ok(id) => message::show(format!("New word added: {}", id)),
+            Err(e) => message::show(format!("Cannot add new word: {}", e)),
         }
     }
 
@@ -319,6 +318,9 @@ impl Screen {
                     self.furiganas.remove(n);
                 }
             }
+            Selection::Furigana(n) => {
+                self.furiganas.get_mut(n).map(|f| f.pop());
+            }
             Selection::Translation(n) => {
                 self.translations.remove(n);
             }
@@ -330,12 +332,15 @@ impl Screen {
         match self.selected_item {
             Selection::AddWord => self.add_word(),
             Selection::Kanji(idx) => {
-                // TODO: is_kanji
-                if idx >= self.kanjis.len() {
-                    self.kanjis.push(ch);
-                    self.furiganas.push(FURIGANA_PLACEHOLDER.to_string());
+                if is_kanji(ch) {
+                    if idx >= self.kanjis.len() {
+                        self.kanjis.push(ch);
+                        self.furiganas.push(FURIGANA_PLACEHOLDER.to_string());
+                    } else {
+                        self.kanjis[idx] = ch;
+                    }
                 } else {
-                    self.kanjis[idx] = ch;
+                    message::show(format!("Should be a kanji, got {}", ch))
                 }
             }
             Selection::Furigana(idx) => {
@@ -346,12 +351,18 @@ impl Screen {
                     furigana.push(ch);
                 }
             }
-            Selection::Translation(idx) => if let Some(translation) = self.translations.get_mut(idx) { translation.push(ch) },
+            Selection::Translation(idx) => {
+                if let Some(translation) = self.translations.get_mut(idx) {
+                    translation.push(ch)
+                } else if idx == self.translations.len() {
+                    self.translations.push(ch.to_string());
+                }
+            }
         }
     }
 }
 
-impl Widget for &mut Screen {
+impl Widget for &mut AddKanji {
     /// UI layout
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
@@ -384,12 +395,18 @@ impl Widget for &mut Screen {
 
         // outer block
         Block::bordered()
-            .title(NAME_VERSION)
+            .title(self.title())
             .title_bottom(intructions)
             .render(area, buf);
 
         self.render_kanjis(rows[0], buf);
         self.render_furigana(rows[1], buf);
         self.render_translations(rows[2], buf);
+    }
+}
+
+impl Screen for AddKanji {
+    fn name(&self) -> &'static str {
+        "Add 漢字"
     }
 }

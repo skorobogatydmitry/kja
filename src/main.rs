@@ -4,7 +4,7 @@ use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
 };
-use kj_assoc::App;
+use kja::App;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
