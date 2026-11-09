@@ -1,9 +1,8 @@
 //! drawing kanjis on TTY
 
-use std::{collections::HashSet, sync::LazyLock};
+use std::sync::LazyLock;
 
 use fontdue::{Font, FontSettings};
-use icu_properties::{CodePointMapData, CodePointMapDataBorrowed, props::Script};
 
 pub static WIDTH_PX: usize = WIDTH_SYMBOLS * SYMBOL_WIDTH_DOTS;
 pub static HEIGHT_PX: usize = HEIGHT_SYMBOLS * SYMBOL_HEIGHT_DOTS;
