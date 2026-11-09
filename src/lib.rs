@@ -12,8 +12,8 @@ pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_
 mod database;
 mod glyph;
 mod message;
-mod record;
 mod screen;
+mod word;
 
 #[repr(u32)]
 #[derive(Default, FromRepr)]
@@ -27,7 +27,7 @@ enum Screen {
 pub struct App {
     current_screen: Screen,
     main_screen: screen::main::MainScreen,
-    add_kanji_screen: screen::add_kanji::AddKanji,
+    add_kanji_screen: screen::add_word::AddWord,
     exit: bool,
 }
 

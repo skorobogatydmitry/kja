@@ -11,8 +11,8 @@ use ratatui::{
 use crate::{
     database::Database,
     glyph::{self, HEIGHT_SYMBOLS, WIDTH_SYMBOLS},
-    record::Word,
     screen::Screen,
+    word::Word,
 };
 
 #[derive(Clone)]

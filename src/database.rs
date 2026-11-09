@@ -10,7 +10,7 @@ use rand::seq::IteratorRandom;
 use refinery::embed_migrations;
 use rusqlite::Connection;
 
-use crate::record::{KanjiReading, Word};
+use crate::word::{KanjiReading, Word};
 
 static DATABASE_FILE_PATH: &str = concat!(env!("CARGO_PKG_NAME"), ".sqlite");
 

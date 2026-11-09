@@ -10,13 +10,12 @@ use ratatui::{
 
 use crate::{
     database::Database,
-    glyph::{is_consistent_kana, is_kana, is_kanji},
     message,
-    record::Word,
     screen::Screen,
+    word::{ErrorWordFromTuple, Word, is_kana, is_kanji},
 };
 
-static FURIGANA_PLACEHOLDER: &str = "<furigana>";
+static FURIGANA_PLACEHOLDER: &str = "<enter furigana>";
 static RIGHTMOST_SPACE_P: u16 = 20;
 
 #[derive(Clone)]
@@ -40,7 +39,7 @@ impl Default for Selection {
 }
 
 #[derive(Default)]
-pub(crate) struct AddKanji {
+pub(crate) struct AddWord {
     kanjis: Vec<char>,
     furiganas: Vec<String>, // TODO: hint from DB
     translations: Vec<String>,
@@ -48,7 +47,7 @@ pub(crate) struct AddKanji {
     clickables: Vec<(Rect, Event)>,
 }
 
-impl AddKanji {
+impl AddWord {
     fn goto_next_left(&mut self) {
         self.selected_item = match self.selected_item {
             Selection::Kanji(n) => Selection::Kanji(n.saturating_sub(1)),
@@ -152,25 +151,26 @@ impl AddKanji {
     }
 
     fn add_word(&mut self) {
-        if self.kanjis.len() != self.furiganas.len() || self.kanjis.len() < 1 {
-            message::show("Too few kanjis to add word".to_string());
-            return;
-        }
-
-        if self
-            .furiganas
-            .iter()
-            .any(|f| f == FURIGANA_PLACEHOLDER || !is_consistent_kana(f))
-        {
-            message::show("Not all furiganas filled or inconsistent kana".to_string());
-            return;
-        }
-
-        let word = Word::from_input(
+        let word = match Word::try_from((
             self.kanjis.drain(..),
             self.furiganas.drain(..),
             self.translations.drain(..),
-        );
+        )) {
+            Ok(word) => word,
+            Err(e) => {
+                message::show(match e {
+                    ErrorWordFromTuple::KanjiCountMismatch => {
+                        "Kanjis and furiganas count don't match".to_string()
+                    }
+                    ErrorWordFromTuple::TooFewKanjis => "Too few kanjis".to_string(),
+                    ErrorWordFromTuple::NotKanji(n) => format!("{n} is not a kanji"),
+                    ErrorWordFromTuple::InconsistentFurigana(furigana) => {
+                        format!("Inconsistent furigana: '{furigana}'")
+                    }
+                });
+                return;
+            }
+        };
         match Database::add_word(word) {
             Ok(id) => message::show(format!("New word added: {}", id)),
             Err(e) => message::show(format!("Cannot add new word: {}", e)),
@@ -182,7 +182,11 @@ impl AddKanji {
         let mut constraints = (0..num_kanjis)
             .map(|_i| Constraint::Fill(1))
             .collect::<Vec<Constraint>>();
-        constraints.push(Constraint::Percentage(RIGHTMOST_SPACE_P));
+        constraints.push(if num_kanjis == 0 {
+            Constraint::Fill(1)
+        } else {
+            Constraint::Percentage(RIGHTMOST_SPACE_P)
+        });
         let mut outer_layout = Layout::horizontal(constraints)
             .spacing(3)
             .flex(ratatui::layout::Flex::Center)
@@ -244,10 +248,14 @@ impl AddKanji {
                 _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
             };
 
-            Paragraph::new(furigana.as_str())
-                .block(block)
-                .centered()
-                .render(col, buf);
+            Paragraph::new(if furigana.is_empty() {
+                FURIGANA_PLACEHOLDER
+            } else {
+                furigana.as_str()
+            })
+            .block(block)
+            .centered()
+            .render(col, buf);
             self.clickables
                 .push((col, Event::Focus(Selection::Furigana(idx))));
         }
@@ -373,10 +381,10 @@ impl AddKanji {
         match self.selected_item {
             Selection::AddWord => self.add_word(),
             Selection::Kanji(idx) => {
-                if is_kanji(ch) {
+                if is_kanji(&ch) {
                     if idx >= self.kanjis.len() {
                         self.kanjis.push(ch);
-                        self.furiganas.push(FURIGANA_PLACEHOLDER.to_string());
+                        self.furiganas.push(String::new());
                     } else {
                         self.kanjis[idx] = ch;
                     }
@@ -390,11 +398,7 @@ impl AddKanji {
                     return;
                 }
                 let furigana = self.furiganas.get_mut(idx).unwrap();
-                if furigana == FURIGANA_PLACEHOLDER {
-                    *furigana = ch.to_string();
-                } else {
-                    furigana.push(ch);
-                }
+                furigana.push(ch);
             }
             Selection::Translation(idx) => {
                 if let Some(translation) = self.translations.get_mut(idx) {
@@ -407,7 +411,7 @@ impl AddKanji {
     }
 }
 
-impl Widget for &mut AddKanji {
+impl Widget for &mut AddWord {
     /// UI layout
     fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
     where
@@ -450,8 +454,8 @@ impl Widget for &mut AddKanji {
     }
 }
 
-impl Screen for AddKanji {
+impl Screen for AddWord {
     fn name(&self) -> &'static str {
-        "Add 漢字"
+        "Add new word"
     }
 }

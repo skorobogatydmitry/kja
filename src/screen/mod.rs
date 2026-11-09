@@ -1,6 +1,6 @@
 use crate::{NAME_VERSION, message};
 
-pub mod add_kanji;
+pub mod add_word;
 pub mod main;
 
 /// common interface for screens

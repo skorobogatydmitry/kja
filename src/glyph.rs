@@ -16,9 +16,6 @@ pub static SYMBOL_HEIGHT_DOTS: usize = 4;
 
 pub static BRAILLE_START_OFFSET: u32 = 0x2800;
 
-static CODE_POINT_MAP_DATA: LazyLock<CodePointMapDataBorrowed<Script>> =
-    LazyLock::new(CodePointMapData::<Script>::new);
-
 // less readable in 25x25, 40x40 is min to make out compex kanjis
 pub static FONT_BYTES: &[u8] = include_bytes!("../res/KleeOne-Regular.ttf");
 /// this font is simple and could be made out from 25x25
@@ -26,31 +23,6 @@ pub static FONT_BYTES: &[u8] = include_bytes!("../res/KleeOne-Regular.ttf");
 static JP_FONT: LazyLock<Font> = LazyLock::new(|| {
     Font::from_bytes(FONT_BYTES, FontSettings::default()).expect("cannot load font")
 });
-
-/// check if the character is kanji
-pub(crate) fn is_kanji(candidate: char) -> bool {
-    CODE_POINT_MAP_DATA.get(candidate) == Script::Han
-}
-
-/// check if the character is kana
-pub(crate) fn is_kana(candidate: char) -> bool {
-    CODE_POINT_MAP_DATA.get(candidate) == Script::Hiragana
-        || CODE_POINT_MAP_DATA.get(candidate) == Script::Katakana
-}
-
-/// check that the word contains only 1 type of kana
-pub(crate) fn is_consistent_kana(candidate: &str) -> bool {
-    let char_types = candidate
-        .chars()
-        .map(|ch| CODE_POINT_MAP_DATA.get(ch))
-        .collect::<HashSet<_>>();
-    if char_types.len() != 1 {
-        return false;
-    } else {
-        let uniq_type = char_types.into_iter().next().unwrap();
-        uniq_type == Script::Hiragana || uniq_type == Script::Katakana
-    }
-}
 
 pub(crate) fn render(kanji: char) -> Vec<String> {
     let dots = glyph_dots(kanji);
