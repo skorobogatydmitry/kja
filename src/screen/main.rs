@@ -1,5 +1,3 @@
-use std::cell::LazyCell;
-
 /// the main screen with word reading guessing
 use crossterm::event::KeyCode;
 use ratatui::{
@@ -13,7 +11,6 @@ use ratatui::{
 use crate::{
     database::Database,
     glyph::{self, HEIGHT_SYMBOLS, WIDTH_SYMBOLS},
-    screen::Screen,
     word::Word,
 };
 
@@ -210,38 +207,11 @@ impl MainScreen {
     }
 }
 
-impl Widget for &mut MainScreen {
-    /// UI layout
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
-        self.clickables = vec![];
-
-        let rows = Layout::vertical([
-            Constraint::Max(HEIGHT_SYMBOLS as u16 + 2), // word
-            Constraint::Max(3),                         // readings
-            Constraint::Fill(1),                        // translations
-        ])
-        .margin(1)
-        .split(area)
-        .to_vec();
-
-        // outer block
-        Block::bordered()
-            .title(self.title())
-            .title_bottom(self.footer())
-            .render(area, buf);
-
-        self.render_word(rows[0], buf);
-        self.render_furigana(rows[1], buf);
-        self.render_translations(rows[2], buf);
-    }
-}
-
 impl crate::screen::Screen for MainScreen {
-    const NAME: &'static str = "Main";
-    const FOOTER: LazyCell<Line<'static>> = LazyCell::new(|| {
+    fn name(&self) -> &'static str {
+        "Main"
+    }
+    fn custom_footer(&self) -> Line<'static> {
         Line::from(vec![
             "<f>".into(),
             " ".into(),
@@ -255,5 +225,22 @@ impl crate::screen::Screen for MainScreen {
             " ".into(),
             "next word by".green(),
         ])
-    });
+    }
+
+    fn render_body(&mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+        self.clickables = vec![];
+
+        let rows = Layout::vertical([
+            Constraint::Max(HEIGHT_SYMBOLS as u16 + 2), // word
+            Constraint::Max(3),                         // readings
+            Constraint::Fill(1),                        // translations
+        ])
+        .margin(1)
+        .split(area)
+        .to_vec();
+
+        self.render_word(rows[0], buf);
+        self.render_furigana(rows[1], buf);
+        self.render_translations(rows[2], buf);
+    }
 }

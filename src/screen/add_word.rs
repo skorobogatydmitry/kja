@@ -1,4 +1,3 @@
-use std::cell::LazyCell;
 
 /// the screen to add a new kanji to database
 use crossterm::event::KeyCode;
@@ -79,7 +78,7 @@ impl AddWord {
     fn goto_next_row(&mut self) {
         self.selected_item = match self.selected_item {
             Selection::Kanji(n) => {
-                if self.kanjis.len() == 0 {
+                if self.kanjis.is_empty() {
                     Selection::Translation(std::cmp::min(self.translations.len(), n))
                 } else {
                     Selection::Furigana(std::cmp::min(self.furiganas.len().saturating_sub(1), n))
@@ -104,14 +103,14 @@ impl AddWord {
             }
             Selection::Furigana(n) => Selection::Kanji(n),
             Selection::Translation(n) => {
-                if self.furiganas.len() == 0 {
+                if self.furiganas.is_empty() {
                     Selection::Kanji(n)
                 } else {
                     Selection::Furigana(std::cmp::min(self.furiganas.len().saturating_sub(1), n))
                 }
             }
             Selection::AddWord => {
-                if self.furiganas.len() == 0 {
+                if self.furiganas.is_empty() {
                     Selection::Kanji(self.kanjis.len())
                 } else {
                     Selection::Furigana(std::cmp::min(
@@ -129,7 +128,7 @@ impl AddWord {
                 if n < self.kanjis.len() {
                     Selection::Kanji(n + 1)
                 } else {
-                    if self.furiganas.len() > 0 {
+                    if !self.furiganas.is_empty() {
                         Selection::Furigana(0)
                     } else {
                         Selection::Translation(0)
@@ -417,12 +416,23 @@ impl AddWord {
     }
 }
 
-impl Widget for &mut AddWord {
-    /// UI layout
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer)
-    where
-        Self: Sized,
-    {
+impl Screen for AddWord {
+    fn name(&self) -> &'static str {
+        "Add word"
+    }
+    fn custom_footer(&self) -> Line<'static> {
+        Line::from(vec![
+            "<enter>".into(),
+            " ".into(),
+            "add kanji".light_blue(),
+            " | ".into(),
+            "<tab>".into(),
+            " ".into(),
+            "next field".light_blue(),
+        ])
+    }
+
+    fn render_body(&mut self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
         self.clickables = vec![];
 
         let rows = Layout::vertical([
@@ -434,29 +444,8 @@ impl Widget for &mut AddWord {
         .split(area)
         .to_vec();
 
-        // outer block
-        Block::bordered()
-            .title(self.title())
-            .title_bottom(self.footer())
-            .render(area, buf);
-
         self.render_kanjis(rows[0], buf);
         self.render_furigana(rows[1], buf);
         self.render_translations(rows[2], buf);
     }
-}
-
-impl Screen for AddWord {
-    const NAME: &'static str = "Add word";
-    const FOOTER: std::cell::LazyCell<Line<'static>> = LazyCell::new(|| {
-        Line::from(vec![
-            "<enter>".into(),
-            " ".into(),
-            "add kanji".light_blue(),
-            " | ".into(),
-            "<tab>".into(),
-            " ".into(),
-            "next field".light_blue(),
-        ])
-    });
 }

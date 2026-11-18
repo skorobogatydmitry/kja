@@ -94,7 +94,7 @@ pub(crate) fn is_consistent_kana(candidate: &str) -> bool {
         .map(|ch| CODE_POINT_MAP_DATA.get(ch))
         .collect::<HashSet<_>>();
     if char_types.len() != 1 {
-        return false;
+        false
     } else {
         let uniq_type = char_types.into_iter().next().unwrap();
         uniq_type == Script::Hiragana || uniq_type == Script::Katakana

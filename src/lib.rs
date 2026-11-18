@@ -8,7 +8,6 @@ use crossterm::event::{
 use ratatui::{DefaultTerminal, layout::Position};
 use strum::{EnumIter, FromRepr};
 
-use crate::screen::{Screen as ScreenT, add_word::AddWord, main::MainScreen};
 
 pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
@@ -29,8 +28,8 @@ enum Screen {
 impl Screen {
     fn name(&self) -> &'static str {
         match self {
-            Self::Main => MainScreen::NAME,
-            Self::AddKanji => AddWord::NAME,
+            Self::Main => "Main",
+            Self::AddKanji => "Add word",
         }
     }
 }
@@ -56,8 +55,14 @@ impl App {
     /// frame re-drawer
     fn draw(&mut self, terminal: &mut DefaultTerminal) -> anyhow::Result<()> {
         terminal.draw(|frame| match self.current_screen {
-            Screen::Main => frame.render_widget(&mut self.main_screen, frame.area()),
-            Screen::AddKanji => frame.render_widget(&mut self.add_kanji_screen, frame.area()),
+            Screen::Main => frame.render_widget(
+                &mut self.main_screen as &mut dyn screen::Screen,
+                frame.area(),
+            ),
+            Screen::AddKanji => frame.render_widget(
+                &mut self.add_kanji_screen as &mut dyn screen::Screen,
+                frame.area(),
+            ),
         })?;
         Ok(())
     }
