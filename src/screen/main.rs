@@ -1,3 +1,5 @@
+use std::cell::LazyCell;
+
 /// the main screen with word reading guessing
 use crossterm::event::KeyCode;
 use ratatui::{
@@ -215,35 +217,6 @@ impl Widget for &mut MainScreen {
         Self: Sized,
     {
         self.clickables = vec![];
-        let intructions = Line::from(vec![
-            "<1..9>".into(),
-            " ".into(),
-            "change screen".blue(),
-            " | ".into(),
-            "<f>".into(),
-            " ".into(),
-            "reveal furigana".blue(),
-            " | ".into(),
-            "<t>".into(),
-            " ".into(),
-            "reveal translations".blue(),
-            " | ".into(),
-            "<left, right, up, down arrows>".into(),
-            " ".into(),
-            "navigation".green(),
-            " | ".into(),
-            "<enter>".into(),
-            " ".into(),
-            "select".green(),
-            " | ".into(),
-            "<^C>".into(),
-            " ".into(),
-            "exit".red(),
-            " | ".into(),
-            "<h>".into(),
-            " ".into(),
-            "help".red(),
-        ]);
 
         let rows = Layout::vertical([
             Constraint::Max(HEIGHT_SYMBOLS as u16 + 2), // word
@@ -257,7 +230,7 @@ impl Widget for &mut MainScreen {
         // outer block
         Block::bordered()
             .title(self.title())
-            .title_bottom(intructions)
+            .title_bottom(self.footer())
             .render(area, buf);
 
         self.render_word(rows[0], buf);
@@ -267,7 +240,20 @@ impl Widget for &mut MainScreen {
 }
 
 impl crate::screen::Screen for MainScreen {
-    fn name(&self) -> &'static str {
-        "Main"
-    }
+    const NAME: &'static str = "Main";
+    const FOOTER: LazyCell<Line<'static>> = LazyCell::new(|| {
+        Line::from(vec![
+            "<f>".into(),
+            " ".into(),
+            "show furigana".blue(),
+            " | ".into(),
+            "<t>".into(),
+            " ".into(),
+            "show translations".blue(),
+            " | ".into(),
+            "<enter>".into(),
+            " ".into(),
+            "next word by".green(),
+        ])
+    });
 }

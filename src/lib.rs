@@ -1,11 +1,14 @@
 // #![feature(lock_value_accessors)]
+#![feature(exact_size_is_empty)]
 
 use crossterm::event::{
     self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
     MouseEventKind,
 };
 use ratatui::{DefaultTerminal, layout::Position};
-use strum::FromRepr;
+use strum::{EnumIter, FromRepr};
+
+use crate::screen::{Screen as ScreenT, add_word::AddWord, main::MainScreen};
 
 pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
@@ -16,11 +19,20 @@ mod screen;
 mod word;
 
 #[repr(u32)]
-#[derive(Default, FromRepr)]
+#[derive(Default, FromRepr, EnumIter)]
 enum Screen {
     #[default]
     Main = 1,
     AddKanji = 2,
+}
+
+impl Screen {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Main => MainScreen::NAME,
+            Self::AddKanji => AddWord::NAME,
+        }
+    }
 }
 
 #[derive(Default)]

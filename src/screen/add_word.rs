@@ -1,3 +1,5 @@
+use std::cell::LazyCell;
+
 /// the screen to add a new kanji to database
 use crossterm::event::KeyCode;
 use ratatui::{
@@ -127,7 +129,11 @@ impl AddWord {
                 if n < self.kanjis.len() {
                     Selection::Kanji(n + 1)
                 } else {
-                    Selection::Furigana(0)
+                    if self.furiganas.len() > 0 {
+                        Selection::Furigana(0)
+                    } else {
+                        Selection::Translation(0)
+                    }
                 }
             }
             Selection::Furigana(n) => {
@@ -418,20 +424,6 @@ impl Widget for &mut AddWord {
         Self: Sized,
     {
         self.clickables = vec![];
-        let intructions = Line::from(vec![
-            // TODO: inject common hotkeys
-            "<left, right, up, down arrows>".into(),
-            " ".into(),
-            "navigation".green(),
-            " | ".into(),
-            "<enter>".into(),
-            " ".into(),
-            "add kanji".green(),
-            " | ".into(),
-            "<tab>".into(),
-            " ".into(),
-            "next field".red(),
-        ]);
 
         let rows = Layout::vertical([
             Constraint::Fill(1), // word
@@ -445,7 +437,7 @@ impl Widget for &mut AddWord {
         // outer block
         Block::bordered()
             .title(self.title())
-            .title_bottom(intructions)
+            .title_bottom(self.footer())
             .render(area, buf);
 
         self.render_kanjis(rows[0], buf);
@@ -455,7 +447,16 @@ impl Widget for &mut AddWord {
 }
 
 impl Screen for AddWord {
-    fn name(&self) -> &'static str {
-        "Add new word"
-    }
+    const NAME: &'static str = "Add word";
+    const FOOTER: std::cell::LazyCell<Line<'static>> = LazyCell::new(|| {
+        Line::from(vec![
+            "<enter>".into(),
+            " ".into(),
+            "add kanji".light_blue(),
+            " | ".into(),
+            "<tab>".into(),
+            " ".into(),
+            "next field".light_blue(),
+        ])
+    });
 }
