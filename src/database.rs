@@ -5,12 +5,16 @@ use std::{
     sync::{LazyLock, Mutex, MutexGuard},
 };
 
+use anyhow::Context;
 use log::warn;
 use rand::seq::IteratorRandom;
 use refinery::embed_migrations;
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 
-use crate::word::{KanjiReading, Word};
+use crate::{
+    message,
+    word::{KanjiReading, Word},
+};
 
 static DATABASE_FILE_PATH: &str = concat!(env!("CARGO_PKG_NAME"), ".sqlite");
 
@@ -42,34 +46,41 @@ impl Database {
             .readings
             .into_iter()
             .enumerate()
-            .map(|(idx, r)| (idx + 1, db.upsert_reading(r)))
-            .rev()
-            .collect::<Vec<(usize, u32)>>();
+            .map(|(idx, r)| db.upsert_reading(r).map(|r_id| (idx + 1, r_id)))
+            .collect::<anyhow::Result<Vec<(usize, u32)>>>()?;
 
-        // TODO: check for dublicates
+        // TODO: check for the same word
 
-        let new_word_id = db
-            .connection
-            .query_one("select max(word_id) + 1 from word_component", [], |r| {
-                r.get::<_, u32>(0)
-            })
-            .unwrap();
+        let new_word_id =
+            db.connection
+                .query_one("insert into word default values returning id", [], |r| {
+                    r.get::<_, u32>(0)
+                })?;
 
         let mut statement = db.connection
-            .prepare("insert into word_component(word_id,word_position,kanji_reading_id) values (?1, ?2, ?3)")
-            .unwrap();
+            .prepare("insert into word_component(word_id,word_position,kanji_reading_id) values (?1, ?2, ?3)")?;
 
-        reading_ids.into_iter().for_each(|(pos, reading_id)| {
+        reading_ids.into_iter().try_for_each(|(pos, reading_id)| {
             statement
                 .execute([new_word_id, pos as u32, reading_id])
-                .unwrap();
-        });
+                .map(drop)
+        })?;
+
+        let mut translation_insert_statement = db
+            .connection
+            .prepare("insert into word_translation(word_id,translation) values (?1, ?2)")?;
+
+        new_word.translations.into_iter().try_for_each(|t| {
+            translation_insert_statement
+                .execute(params![new_word_id, t])
+                .map(drop)
+        })?;
 
         Ok(new_word_id)
     }
 
     /// insert or get its id
-    fn upsert_reading(&mut self, reading: KanjiReading) -> u32 {
+    fn upsert_reading(&mut self, reading: KanjiReading) -> anyhow::Result<u32> {
         self
             .connection
             .query_one(
@@ -80,7 +91,7 @@ impl Database {
                 ],
                 |r| r.get::<_, u32>(0),
             )
-            .expect("error upserting a new reading")
+            .context("error upserting a new reading")
     }
 
     /// get a random word
@@ -88,11 +99,9 @@ impl Database {
         let mut db = Self::get();
         let word_id = db
             .connection
-            .query_one(
-                "select word_id from word_component order by random() limit 1",
-                [],
-                |r| r.get::<_, u32>(0),
-            )
+            .query_one("select id from word order by random() limit 1", [], |r| {
+                r.get::<_, u32>(0)
+            })
             .expect("cannot parse random word id");
 
         db.words_tail.insert(word_id);
@@ -118,7 +127,10 @@ impl Database {
             .collect::<Vec<u32>>();
 
         let word_id = *if unused_words.is_empty() {
-            warn!("no new words with kanji {}, using random one", kanji);
+            message::show(format!(
+                "no new words with kanji {}, using random one",
+                kanji
+            ));
             available_word_ids.iter().choose(&mut rand::rng())
         } else {
             unused_words.iter().choose(&mut rand::rng())

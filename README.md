@@ -10,7 +10,17 @@ Other features:
 - it's solely depends on the database's content, but 音読み　is expected to be in カタカナ and 訓読み　- in ひらがな.
 
 # Not implemented among the above
-- adding words
-- actually using database to get words
-- storing and showing translations
+- browsing database:
+  - delete word
 - choosing database to use (non-functional, but vital IMO)
+
+# Queries to browse database
+
+1. get word by ID
+`select kanji, reading, word_position from word_component wc join kanji_reading kr on kr.id = wc.kanji_reading_id where word_id = 4;`
+
+2. get word's translations
+`select * from word_translation where word_id = 3;`
+
+3. dump database
+`sqlite3 kja.sqlite '.dump' > res/sample-database.sql`
