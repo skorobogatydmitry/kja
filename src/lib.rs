@@ -9,6 +9,7 @@ use ratatui::{DefaultTerminal, layout::Position};
 use strum::{EnumIter, FromRepr};
 
 pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
+pub use database::DATABASE_FILE_PATH;
 
 mod database;
 mod glyph;

@@ -2,7 +2,8 @@
 
 use std::{
     collections::HashSet,
-    sync::{LazyLock, Mutex, MutexGuard},
+    fs,
+    sync::{LazyLock, Mutex, MutexGuard, OnceLock},
 };
 
 use anyhow::Context;
@@ -16,10 +17,20 @@ use crate::{
     word::{KanjiReading, Word},
 };
 
-static DATABASE_FILE_PATH: &str = concat!(env!("CARGO_PKG_NAME"), ".sqlite");
+pub static DATABASE_FILE_PATH: OnceLock<String> = OnceLock::new();
+pub const DEFAULT_DATABASE_FILE_PATH: &str = concat!(env!("CARGO_PKG_NAME"), ".sqlite");
 
-pub(super) static DATABASE: LazyLock<Mutex<Database>> = LazyLock::new(|| {
-    let mut connection = Connection::open(DATABASE_FILE_PATH).expect("cannot connect to database");
+static DATABASE: LazyLock<Mutex<Database>> = LazyLock::new(|| {
+    let database_file_path = DATABASE_FILE_PATH
+        .get()
+        .cloned()
+        .unwrap_or(DEFAULT_DATABASE_FILE_PATH.to_string());
+    match fs::exists(&database_file_path) {
+        Ok(true) => log::info!("Database will be loaded from {database_file_path}"),
+        Ok(false) => panic!("Database file not found at {database_file_path}"),
+        Err(e) => panic!("Cannot check database at {database_file_path}: {e}"),
+    }
+    let mut connection = Connection::open(database_file_path).expect("cannot connect to database");
     migrations::runner()
         .run(&mut connection)
         .expect("database migrations failed");

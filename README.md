@@ -10,10 +10,8 @@ Other features:
 - it's solely depends on the database's content, but 音読み　is expected to be in カタカナ and 訓読み　- in ひらがな.
 
 # Not implemented among the above
-- size kanjis by screen height & width
 - browsing database:
   - delete word
-- choosing database to use (non-functional, but vital IMO)
 
 # Queries to browse database
 

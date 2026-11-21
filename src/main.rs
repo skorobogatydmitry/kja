@@ -1,13 +1,29 @@
-use std::io::stdout;
+use std::{env::args, io::stdout};
 
+use anyhow::bail;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
 };
-use kja::App;
+use kja::{App, DATABASE_FILE_PATH};
+use log::info;
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
+
+    let mut args = args();
+    args.next(); // skip the binary name
+    if let Some(database_file_path) = args.next() {
+        info!("loading database from {database_file_path}");
+        match std::fs::exists(&database_file_path) {
+            Ok(true) => match DATABASE_FILE_PATH.set(database_file_path.clone()) {
+                Ok(()) => info!("Database file path is set to {database_file_path}"),
+                Err(e) => bail!("Cannot set database file to {database_file_path}: {e}"),
+            },
+            Ok(false) => bail!("Database file `{database_file_path}' not found"),
+            Err(e) => bail!("Cannot check database file `{database_file_path}': {e}"),
+        }
+    }
 
     execute!(stdout(), EnableMouseCapture).unwrap();
 
