@@ -10,7 +10,7 @@ use ratatui::{
 
 use crate::{
     database::Database,
-    glyph::{self, HEIGHT_SYMBOLS, WIDTH_SYMBOLS},
+    glyph::{self, MIN_WIDTH_SYMBOLS, RenderSizeSymbols},
     word::Word,
 };
 
@@ -91,12 +91,13 @@ impl MainScreen {
 
     fn render_word(&mut self, area: Rect, buf: &mut Buffer) {
         let num_kanjis = self.word.readings.len();
-        let outer_layout =
-            Layout::horizontal((0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)))
-                .spacing(3)
-                .flex(ratatui::layout::Flex::Center)
-                .split(area)
-                .to_vec();
+        let outer_layout = Layout::horizontal(
+            (0..num_kanjis).map(|_| Constraint::Min(MIN_WIDTH_SYMBOLS as u16 + 2)),
+        )
+        .spacing(3)
+        .flex(ratatui::layout::Flex::Center)
+        .split(area)
+        .to_vec();
 
         for (idx, (reading, col)) in self.word.readings.iter().zip(outer_layout).enumerate() {
             let kanji_block = match self.selected_item {
@@ -106,7 +107,10 @@ impl MainScreen {
                 _ => Block::bordered().border_type(ratatui::widgets::BorderType::Rounded),
             };
 
-            let rendered_kanji_lines = glyph::render(reading.kanji);
+            let rendered_kanji_lines = glyph::render(
+                reading.kanji,
+                RenderSizeSymbols::new(col.width - 2, col.height - 2),
+            );
             Paragraph::new(rendered_kanji_lines.join("\n"))
                 .block(kanji_block)
                 .centered()
@@ -120,7 +124,7 @@ impl MainScreen {
         if self.furigana_revealed {
             let num_kanjis = self.word.readings.len();
             let outer_layout = Layout::horizontal(
-                (0..num_kanjis).map(|_| Constraint::Min(WIDTH_SYMBOLS as u16 + 2)),
+                (0..num_kanjis).map(|_| Constraint::Min(MIN_WIDTH_SYMBOLS as u16 + 2)),
             )
             .spacing(3)
             .flex(ratatui::layout::Flex::Center)
@@ -226,9 +230,9 @@ impl crate::screen::Screen for MainScreen {
         self.clickables = vec![];
 
         let rows = Layout::vertical([
-            Constraint::Max(HEIGHT_SYMBOLS as u16 + 2), // word
-            Constraint::Max(3),                         // readings
-            Constraint::Max(3),                         // translations
+            Constraint::Min(glyph::MIN_HEIGHT_SYMBOLS as u16 + 2), // word
+            Constraint::Max(3),                                    // readings
+            Constraint::Max(5),                                    // translations
         ])
         .margin(1)
         .split(area)

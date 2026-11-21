@@ -4,16 +4,16 @@ use std::sync::LazyLock;
 
 use fontdue::{Font, FontSettings};
 
-pub static WIDTH_PX: usize = WIDTH_SYMBOLS * SYMBOL_WIDTH_DOTS;
-pub static HEIGHT_PX: usize = HEIGHT_SYMBOLS * SYMBOL_HEIGHT_DOTS;
+pub const MIN_WIDTH_SYMBOLS: usize = 14;
+pub const MIN_HEIGHT_SYMBOLS: usize = 5;
 
-pub static WIDTH_SYMBOLS: usize = 14;
-pub static HEIGHT_SYMBOLS: usize = 5;
+// width / height
+const ASPECT_RATIO: f32 = 3.0;
 
-pub static SYMBOL_WIDTH_DOTS: usize = 2;
-pub static SYMBOL_HEIGHT_DOTS: usize = 4;
+const SYMBOL_WIDTH_DOTS: usize = 2;
+const SYMBOL_HEIGHT_DOTS: usize = 4;
 
-pub static BRAILLE_START_OFFSET: u32 = 0x2800;
+const BRAILLE_START_OFFSET: u32 = 0x2800;
 
 // less readable in 25x25, 40x40 is min to make out compex kanjis
 pub static FONT_BYTES: &[u8] = include_bytes!("../res/KleeOne-Regular.ttf");
@@ -23,18 +23,59 @@ static JP_FONT: LazyLock<Font> = LazyLock::new(|| {
     Font::from_bytes(FONT_BYTES, FontSettings::default()).expect("cannot load font")
 });
 
-pub(crate) fn render(kanji: char) -> Vec<String> {
-    let dots = glyph_dots(kanji);
-    to_braille(dots)
+/// size of the block which the glyph must fit
+#[derive(Debug)]
+pub struct RenderSizeSymbols {
+    height: u16,
+    width: u16,
 }
 
-fn glyph_dots(ch: char) -> [[bool; WIDTH_PX]; HEIGHT_PX] {
-    let (m, bmp) = JP_FONT.rasterize(ch, std::cmp::min(WIDTH_PX, HEIGHT_PX) as f32);
-    let mut dots = [[false; WIDTH_PX]; HEIGHT_PX];
-    let ox = WIDTH_PX.saturating_sub(m.width) / 2;
-    let oy = HEIGHT_PX.saturating_sub(m.height) / 2;
-    for y in 0..m.height.min(HEIGHT_PX) {
-        for x in 0..m.width.min(WIDTH_PX) {
+impl RenderSizeSymbols {
+    pub fn new(w: u16, h: u16) -> Self {
+        Self {
+            height: h,
+            width: w,
+        }
+    }
+
+    fn aspect_ratio(&self) -> f32 {
+        self.width as f32 / self.height as f32
+    }
+
+    fn width_px(&self) -> usize {
+        self.width as usize * SYMBOL_WIDTH_DOTS as usize
+    }
+
+    fn height_px(&self) -> usize {
+        self.height as usize * SYMBOL_HEIGHT_DOTS as usize
+    }
+}
+
+pub(crate) fn render(kanji: char, box_size: RenderSizeSymbols) -> Vec<String> {
+    let box_ratio = box_size.aspect_ratio();
+    let size = if box_ratio > ASPECT_RATIO {
+        RenderSizeSymbols::new(
+            (box_size.height as f32 * ASPECT_RATIO).ceil() as u16,
+            box_size.height,
+        )
+    } else {
+        RenderSizeSymbols::new(
+            box_size.width,
+            (box_size.width as f32 / ASPECT_RATIO).ceil() as u16,
+        )
+    };
+    let dots = glyph_dots(kanji, &size);
+    to_braille(dots, size)
+}
+
+fn glyph_dots(ch: char, size: &RenderSizeSymbols) -> Vec<Vec<bool>> {
+    let (width_px, height_px) = (size.width_px(), size.height_px());
+    let (m, bmp) = JP_FONT.rasterize(ch, width_px.min(height_px) as f32);
+    let mut dots = vec![vec![false; width_px]; height_px];
+    let ox = width_px.saturating_sub(m.width) / 2;
+    let oy = height_px.saturating_sub(m.height) / 2;
+    for y in 0..m.height.min(height_px) {
+        for x in 0..m.width.min(width_px) {
             if bmp[y * m.width + x] > 70 {
                 dots[oy + y][ox + x] = true;
             }
@@ -44,12 +85,12 @@ fn glyph_dots(ch: char) -> [[bool; WIDTH_PX]; HEIGHT_PX] {
 }
 
 /// convert dots matrix to list of braille symbol rows
-fn to_braille(dots: [[bool; WIDTH_PX]; HEIGHT_PX]) -> Vec<String> {
+fn to_braille(dots: Vec<Vec<bool>>, size: RenderSizeSymbols) -> Vec<String> {
     const BITS: [[u32; SYMBOL_WIDTH_DOTS]; SYMBOL_HEIGHT_DOTS] =
         [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]];
-    (0..HEIGHT_SYMBOLS)
+    (0..size.height as usize)
         .map(|cy| {
-            (0..WIDTH_SYMBOLS)
+            (0..size.width as usize)
                 .map(|cx| {
                     let mut b = 0;
                     for (dy, row) in BITS.iter().enumerate() {
