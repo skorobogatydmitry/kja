@@ -81,10 +81,6 @@ impl MainScreen {
         }
     }
 
-    fn goto_help(&self) {
-        todo!()
-    }
-
     /// set the new word and reset the view
     fn replace_word(&mut self, new_word: Word) {
         self.word = new_word;
@@ -183,7 +179,6 @@ impl MainScreen {
             (KeyCode::Up, _) => self.goto_next_row(),
             (KeyCode::Down, _) => self.goto_next_row(),
             (KeyCode::Enter, _) => self.apply_selection(&self.selected_item.clone()),
-            (KeyCode::Char('h'), _) => self.goto_help(),
             (KeyCode::Char('f'), _) => self.furigana_revealed = !self.furigana_revealed,
             (KeyCode::Char('t'), _) => self.translation_revealed = !self.translation_revealed,
             _ => (), // TODO: log
@@ -233,7 +228,7 @@ impl crate::screen::Screen for MainScreen {
         let rows = Layout::vertical([
             Constraint::Max(HEIGHT_SYMBOLS as u16 + 2), // word
             Constraint::Max(3),                         // readings
-            Constraint::Fill(1),                        // translations
+            Constraint::Max(3),                         // translations
         ])
         .margin(1)
         .split(area)

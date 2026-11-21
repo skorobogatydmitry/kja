@@ -8,7 +8,6 @@ use crossterm::event::{
 use ratatui::{DefaultTerminal, layout::Position};
 use strum::{EnumIter, FromRepr};
 
-
 pub const NAME_VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
 mod database;
@@ -83,22 +82,18 @@ impl App {
     fn handle_key_event(&mut self, event: KeyEvent) -> anyhow::Result<()> {
         match (event.code, event.modifiers) {
             (KeyCode::Char('c'), KeyModifiers::CONTROL) => self.exit = true,
-            other_keypress => {
-                // all numbers are reserved to switch screens
-                if let KeyCode::Char(ch) = other_keypress.0
-                    && ch.is_ascii_digit()
-                {
-                    let digit = ch.to_digit(10).unwrap();
-                    if let Some(new_screen) = Screen::from_repr(digit) {
-                        self.current_screen = new_screen;
-                    }
-                    return Ok(());
-                }
-                match self.current_screen {
-                    Screen::Main => self.main_screen.handle_key_event(other_keypress),
-                    Screen::AddKanji => self.add_kanji_screen.handle_key_event(other_keypress),
+            (KeyCode::Char('h'), _) => self.help(),
+            // all numbers are reserved to switch screens
+            (KeyCode::Char(ch), _) if ch.is_ascii_digit() => {
+                let digit = ch.to_digit(10).unwrap();
+                if let Some(new_screen) = Screen::from_repr(digit) {
+                    self.current_screen = new_screen;
                 }
             }
+            other_keypress => match self.current_screen {
+                Screen::Main => self.main_screen.handle_key_event(other_keypress),
+                Screen::AddKanji => self.add_kanji_screen.handle_key_event(other_keypress),
+            },
         }
         Ok(())
     }
@@ -113,5 +108,9 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn help(&self) {
+        todo!("goto help screen")
     }
 }

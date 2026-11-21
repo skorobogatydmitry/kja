@@ -43,6 +43,7 @@ fn glyph_dots(ch: char) -> [[bool; WIDTH_PX]; HEIGHT_PX] {
     dots
 }
 
+/// convert dots matrix to list of braille symbol rows
 fn to_braille(dots: [[bool; WIDTH_PX]; HEIGHT_PX]) -> Vec<String> {
     const BITS: [[u32; SYMBOL_WIDTH_DOTS]; SYMBOL_HEIGHT_DOTS] =
         [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]];
