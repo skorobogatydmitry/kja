@@ -1,6 +1,3 @@
-// #![feature(lock_value_accessors)]
-#![feature(exact_size_is_empty)]
-
 use crossterm::event::{
     self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
     MouseEventKind,

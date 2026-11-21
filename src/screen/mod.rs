@@ -1,4 +1,3 @@
-
 use ratatui::{
     style::Stylize,
     text::Line,
@@ -45,7 +44,7 @@ pub(crate) trait Screen {
         footer.push_span("navigation".light_green());
 
         let custom_footer = self.custom_footer();
-        if !custom_footer.iter().is_empty() {
+        if !custom_footer.iter().len() == 0 {
             footer.push_span(" | ");
             footer.extend(custom_footer.iter().cloned());
         }
