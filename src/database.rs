@@ -18,22 +18,55 @@ use crate::{
 };
 
 pub static DATABASE_FILE_PATH: OnceLock<String> = OnceLock::new();
-pub const DEFAULT_DATABASE_FILE_PATH: &str = concat!(env!("CARGO_PKG_NAME"), ".sqlite");
+pub const DEFAULT_DATABASE_FILE_PATH: &str = concat!(
+    "~/.local/share/",
+    env!("CARGO_PKG_NAME"),
+    "/database.sqlite"
+);
+
+const DEFAULT_DATABASE: &str = include_str!("../res/default-database.sql");
 
 static DATABASE: LazyLock<Mutex<Database>> = LazyLock::new(|| {
-    let database_file_path = DATABASE_FILE_PATH
-        .get()
-        .cloned()
-        .unwrap_or(DEFAULT_DATABASE_FILE_PATH.to_string());
-    match fs::exists(&database_file_path) {
-        Ok(true) => log::info!("Database will be loaded from {database_file_path}"),
-        Ok(false) => panic!("Database file not found at {database_file_path}"),
+    let database_file_path = shellexpand::full(
+        &DATABASE_FILE_PATH
+            .get()
+            .map(String::as_str)
+            .unwrap_or(DEFAULT_DATABASE_FILE_PATH),
+    )
+    .expect("Error expanding database path")
+    .to_string();
+
+    let import_default_database = match fs::exists(&database_file_path) {
+        Ok(true) => {
+            log::info!("Database will be loaded from {database_file_path}");
+            false
+        }
+        Ok(false) => {
+            warn!(
+                "Database file not found at `{database_file_path}', creating new with default dict"
+            );
+            true
+        }
         Err(e) => panic!("Cannot check database at {database_file_path}: {e}"),
-    }
+    };
+
     let mut connection = Connection::open(database_file_path).expect("cannot connect to database");
     migrations::runner()
         .run(&mut connection)
         .expect("database migrations failed");
+
+    if import_default_database
+        || connection
+            .query_row("select count(id) from word", [], |row| {
+                row.get::<usize, u32>(0)
+            })
+            .expect("cannot check total words count")
+            == 0
+    {
+        connection
+            .execute_batch(DEFAULT_DATABASE)
+            .expect("error importing default database");
+    }
     Mutex::new(Database {
         connection,
         words_tail: HashSet::new(),

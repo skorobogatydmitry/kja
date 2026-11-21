@@ -21,5 +21,11 @@ Other features:
 2. get word's translations
 `select * from word_translation where word_id = 3;`
 
-3. dump database
-`sqlite3 kja.sqlite '.dump' > res/sample-database.sql`
+3. dump whole database
+`sqlite3 ~/.local/share/kja/database.sqlite '.dump' > dump.sql`
+
+4. refresh default database
+```sh
+sqlite3 ~/.local/share/kja/database.sqlite \
+  '.dump --data-only word word_translation word_component kanji_reading' > res/default-database.sql
+```
