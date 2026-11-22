@@ -1,4 +1,3 @@
-
 /// the screen to add a new kanji to database
 use crossterm::event::KeyCode;
 use ratatui::{
@@ -178,7 +177,7 @@ impl AddWord {
         };
         match Database::add_word(word) {
             Ok(id) => message::show(format!("New word added: {}", id)),
-            Err(e) => message::show(format!("Cannot add new word: {}", e)),
+            Err(e) => message::show(format!("Can't add word: {}", e)),
         }
     }
 

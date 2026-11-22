@@ -3,10 +3,11 @@
 use std::{
     collections::HashSet,
     fs,
+    path::Path,
     sync::{LazyLock, Mutex, MutexGuard, OnceLock},
 };
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use log::warn;
 use rand::seq::IteratorRandom;
 use refinery::embed_migrations;
@@ -45,6 +46,11 @@ static DATABASE: LazyLock<Mutex<Database>> = LazyLock::new(|| {
             warn!(
                 "Database file not found at `{database_file_path}', creating new with default dict"
             );
+            if let Some(parent_dir) = Path::new(&database_file_path).parent()
+                && !parent_dir.exists()
+            {
+                fs::create_dir(parent_dir).expect("cannot create directory for database");
+            }
             true
         }
         Err(e) => panic!("Cannot check database at {database_file_path}: {e}"),
@@ -86,14 +92,19 @@ impl Database {
     pub(super) fn add_word(new_word: Word) -> anyhow::Result<u32> {
         let mut db = Database::get();
 
-        let reading_ids = new_word
+        let mut reading_ids = new_word
             .readings
             .into_iter()
             .enumerate()
             .map(|(idx, r)| db.upsert_reading(r).map(|r_id| (idx + 1, r_id)))
             .collect::<anyhow::Result<Vec<(usize, u32)>>>()?;
 
-        // TODO: check for the same word
+        reading_ids.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
+        if let Some(existing_word_id) =
+            db.get_word_by_readings(reading_ids.iter().map(|(_, r_id)| *r_id).collect())
+        {
+            bail!("word exists (id {existing_word_id})");
+        }
 
         let new_word_id =
             db.connection
@@ -121,6 +132,38 @@ impl Database {
         })?;
 
         Ok(new_word_id)
+    }
+
+    /// get word id by list of readings, if exists
+    fn get_word_by_readings(&mut self, reading_ids: Vec<u32>) -> Option<u32> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "select word_id from (
+                select distinct
+                    word_id,
+                    group_concat(kanji_reading_id) over (
+                        partition by word_id
+                        order by word_position
+                        rows between unbounded preceding and unbounded following
+                    ) readings
+                from word_component
+            ) where readings = ?1",
+            )
+            .expect("cannot prepare query to find word dublicates");
+
+        let params = reading_ids.iter().fold(String::new(), |mut acc, id| {
+            if !acc.is_empty() {
+                acc.push(',');
+            }
+            acc.push_str(&id.to_string());
+            acc
+        });
+        match statement.query_one([params], |r| r.get::<_, u32>(0)) {
+            Ok(id) => Some(id),
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(e) => panic!("Database contains >1 words with readings seq {reading_ids:?}: {e}"),
+        }
     }
 
     /// insert or get its id
