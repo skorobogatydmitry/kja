@@ -950,7 +950,7 @@ dependencies = [
 
 [[package]]
 name = "kja"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -958,7 +958,6 @@ dependencies = [
  "fontdue",
  "icu_properties",
  "log",
- "rakugaki",
  "rand 0.10.3",
  "ratatui",
  "refinery",
@@ -1435,15 +1434,6 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
-
-[[package]]
-name = "rakugaki"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "392f4e77face373407676da928998d058db1d622b5054c41f7804e4c43afcdec"
-dependencies = [
- "fontdue",
-]
 
 [[package]]
 name = "rand"

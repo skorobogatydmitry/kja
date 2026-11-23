@@ -53,8 +53,16 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: kja-linux
+          path: linux
+      - uses: actions/download-artifact@v4
+        with:
+          name: kja-android
+          path: android
+      - name: Add arch to binary names
+        run: |
+          mv android/kja kja-android-aarch64
+          mv linux/kja kja-linux-x86_64
       - uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/**/*
+          files: kja-*
