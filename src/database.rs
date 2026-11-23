@@ -1,4 +1,4 @@
-//! Database requests handler
+//! Database wrapper
 
 use std::{
     collections::HashSet,

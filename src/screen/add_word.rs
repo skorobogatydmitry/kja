@@ -242,7 +242,7 @@ impl AddWord {
             .split(area)
             .to_vec();
 
-        let last_col = outer_layout.pop().unwrap(); // there's at least 1 col
+        let last_col = outer_layout.pop().unwrap(); // there's at least 1 filler col
 
         for (idx, (furigana, col)) in self.furiganas.iter().zip(outer_layout).enumerate() {
             let block = match self.selected_item {
@@ -264,6 +264,7 @@ impl AddWord {
                 .push((col, Event::Focus(Selection::Furigana(idx))));
         }
 
+        // an empty filler
         Paragraph::new("").centered().render(last_col, buf);
     }
 
@@ -279,8 +280,8 @@ impl AddWord {
             .split(area)
             .to_vec();
 
-        let add_button_col = outer_layout.pop().unwrap(); // there's at least 2 cols
-        let add_translation_col = outer_layout.pop().unwrap(); // there's at least 2 cols
+        let add_button_col = outer_layout.pop().unwrap(); // there're at least 2 cols
+        let add_translation_col = outer_layout.pop().unwrap(); // there're at least 2 cols
 
         for (idx, (translation, col)) in self.translations.iter().zip(outer_layout).enumerate() {
             let block = match self.selected_item {
@@ -397,12 +398,12 @@ impl AddWord {
                 }
             }
             Selection::Furigana(idx) => {
-                if !is_kana(ch) {
+                if is_kana(ch) {
+                    let furigana = self.furiganas.get_mut(idx).unwrap();
+                    furigana.push(ch);
+                } else {
                     message::show(format!("Only kana allowed, got {ch}"));
-                    return;
                 }
-                let furigana = self.furiganas.get_mut(idx).unwrap();
-                furigana.push(ch);
             }
             Selection::Translation(idx) => {
                 if let Some(translation) = self.translations.get_mut(idx) {

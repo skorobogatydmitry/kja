@@ -1,19 +1,24 @@
-# Application to learn 漢字 reading through chain of words
+# Console application to learn 漢字 reading through chains of words
 
-1. The application shows a word and expects you to recollect its reading
-2. You can reveal the reading and check yourself
-3. You can reveal word's translation and check it too
-4. After revealing the reading, you can　choose any of the readings or the 漢字　-s to show another word with the same 漢字　or reading
-5. All the words are stored in database you can fill through the settings menu
+The application shows a (random) word and expects you to recollect its kanji's readings (furigana).
+You can reveal the reading and translations to check yourself.  
+If you click on / select a kanji or a reading, the app goes to the different word with the same kanji or reading.
 
-Other features:
-- it's solely depends on the database's content, but 音読み　is expected to be in カタカナ and 訓読み　- in ひらがな.
+## Adding a word
 
-# Not implemented among the above
-- browsing database:
-  - delete word
+All the words are stored in database you can fill it through the adding screen or direct inserts.
 
-# Queries to browse database
+## Internals
+The app is backed by a sqlite database (see `migrations/`) stored in `~/.local/kja/database.sql` by default. this file is the only thing to save / share between devices.
+
+The app works on android through termux.
+
+### Not implemented / TODO
+- Words database browsing screen
+- Words deletions
+- Shared remove database
+
+### Queries
 
 1. get word by ID
 `select kanji, reading, word_position from word_component wc join kanji_reading kr on kr.id = wc.kanji_reading_id where word_id = 4;`

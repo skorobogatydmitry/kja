@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    execute!(stdout(), EnableMouseCapture).unwrap();
+    execute!(stdout(), EnableMouseCapture).expect("cannot enable mouse capture");
 
     let default_panic_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
