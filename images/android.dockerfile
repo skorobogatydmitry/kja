@@ -1,8 +1,17 @@
 FROM rust:1-alpine
 
+ENV ANDROID_API=35
 ENV ANDROID_HOME="/opt/android"
 ENV ANDROID_NDK_ROOT="${ANDROID_HOME}/ndk/29.0.14206865"
-ENV PATH="$PATH:${ANDROID_NDK_ROOT}:${ANDROID_HOME}/build-tools/36.0.0:${ANDROID_HOME}/cmdline-tools/bin"
+ENV NDK_TOOLCHAIN="${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+ENV PATH="$PATH:${NDK_TOOLCHAIN}:${ANDROID_HOME}/build-tools/36.0.0:${ANDROID_HOME}/cmdline-tools/bin"
+# Android binary names doesn't match cargo's conventions
+ENV CC_aarch64_linux_android=aarch64-linux-android${ANDROID_API}-clang
+ENV CXX_aarch64_linux_android=aarch64-linux-android${ANDROID_API}-clang++
+ENV CC_armv7_linux_androideabi=armv7a-linux-androideabi${ANDROID_API}-clang
+ENV CXX_armv7_linux_androideabi=armv7a-linux-androideabi${ANDROID_API}-clang++
+ENV CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=aarch64-linux-android${ANDROID_API}-clang
+ENV CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER=armv7a-linux-androideabi${ANDROID_API}-clang
 
 RUN rustup target add armv7-linux-androideabi aarch64-linux-android
 
