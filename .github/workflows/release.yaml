@@ -20,6 +20,7 @@ jobs:
           - armv7-linux-androideabi
           - aarch64-linux-android
     steps:
+      - run: rustup target add ${{ matrix.target }}
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref_name }}
