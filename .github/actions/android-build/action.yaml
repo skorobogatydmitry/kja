@@ -1,0 +1,13 @@
+name: cargo build for android
+description: run "cargo build" commands in container
+
+inputs:
+  target:
+    description: cargo --target -s argument
+    required: true
+
+runs:
+  using: docker
+  image: ../../../images/android.dockerfile
+  env:
+    INPUT_CARGO_ARGS: build --release --target ${{ inputs.target }}
